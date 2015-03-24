@@ -37,7 +37,7 @@
 
 #define SLEEP_TIME 10000
 
-
+#define CHILD_ID_VOLTAGE 3
 #define CHILD_ID_MCP9700_TEMP 2
 #define CHILD_ID_DALLAS_TEMP 1
 #define CHILD_ID_LIGHT 0
@@ -78,6 +78,7 @@ MyMessage msgDallasTemp(CHILD_ID_DALLAS_TEMP, V_TEMP);
 #if LIGHT_LEVEL_ENABLE
 MyMessage msgLightLevel(CHILD_ID_LIGHT, V_LIGHT_LEVEL);
 #endif
+MyMessage msgVolt(CHILD_ID_VOLTAGE, V_VOLTAGE); 
 
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ONE_WIRE_BUS);
@@ -93,6 +94,7 @@ DeviceAddress insideThermometer;
 void setup()
 {
   node.begin();
+  analogReference(INTERNAL);
   node.sendSketchInfo("devduino-temp-sensor", "0.2");
   // Register all sensors to gateway (they will be created as child devices)
   #if MCP9700_ENABLE
@@ -109,6 +111,7 @@ void loop()
   // Process incoming messages (like config from server)
   node.process();
   node.sendBatteryLevel(getVccLevel());
+  node.send(msgVolt.set(readVcc(), 1));
   
   #if MCP9700_ENABLE
   node.send(msgMCP9700Temp.set(readMCP9700Temp(), 1));

@@ -58,12 +58,13 @@
 #if MCP9700_ENABLE
 float readMCP9700Temp();
 #endif
+void readDS18B20();
+uint16_t measureBattery();
+uint8_t getBatteryPercent();
+void readLDRLightLevel();
 uint16_t readVcc();
-uint8_t getVccLevel();
 
-#if LIGHT_LEVEL_ENABLE
-int lastLightLevel;
-#endif
+
 float lastTemperature;
 boolean receivedConfig = false;
 boolean metric = true; 
@@ -110,54 +111,53 @@ void loop()
 {
   // Process incoming messages (like config from server)
   node.process();
-  node.sendBatteryLevel(getVccLevel());
-  node.send(msgVolt.set(readVcc(), 1));
+  measureBattery();
+  readDS18B20();
   
-  #if MCP9700_ENABLE
-  node.send(msgMCP9700Temp.set(readMCP9700Temp(), 1));
-  #endif
-  
+
+  node.sleep(SLEEP_TIME);
+}
+
+void readDS18B20()
+{
+  static float lastTemperature = -200.1;
   // Fetch temperatures from Dallas sensors
   dallas_sensor.requestTemperatures(); 
   // Fetch and round temperature to one decimal
   float temperature = static_cast<float>(static_cast<int>((node.getConfig().isMetric?dallas_sensor.getTempCByIndex(0):dallas_sensor.getTempFByIndex(0)) * 10.)) / 10.;
   // Only send data if temperature has changed and no error
-  //if (lastTemperature != temperature && temperature != -127.00)
-  //{
+  if (lastTemperature != temperature && temperature != -127.00)
+  {
     // Send in the new temperature
     node.send(msgDallasTemp.set(temperature,1));
-    //lastTemperature = temperature;
-  //}
-  
+    lastTemperature = temperature;
+  }
+}
+
+
+
+void readLDRLightLevel()
+{
 #if LIGHT_LEVEL_ENABLE
+  static int lastLightLevel = 0;
   int lightLevel = (1023-analogRead(LIGHT_SENSOR_ANALOG_PIN))/10.23;
   if (lightLevel != lastLightLevel)
   {
       node.send(msgLightLevel.set(lightLevel));
       lastLightLevel = lightLevel;
   }
-#endif
-  node.sleep(SLEEP_TIME);
+#endif  
 }
 
-
-
-#if LIGHT_LEVEL_ENABLE
-int readLightLevel()
-{
-  int lightLevel = (1023-analogRead(LIGHT_SENSOR_ANALOG_PIN))/10.23;
-  return lightLevel;
-  
-}
-#endif
 
 /**
 * Read the temperature from MCP9700
 */
 
-#if MCP9700_ENABLE
-float readMCP9700Temp() 
+
+void readMCP9700Temp() 
 {
+#if MCP9700_ENABLE
   float temp = analogRead(MCP9700_pin)*3.3/1024.0;
   temp = temp - 0.5;
   temp = temp / 0.01;
@@ -166,13 +166,14 @@ float readMCP9700Temp()
   Serial.println(temp);
   Serial.println('\r');
   #endif
-  return temp;
+  node.send(msgMCP9700Temp.set(temp, 1));
+#endif  
 }
-#endif
+
 /**
 * Get the percentage of power in the battery
 */
-uint8_t getVccLevel()
+uint8_t getBatteryPercent()
 {
   static const float full_battery_v = 3169.0;
   float level = readVcc() / full_battery_v;
@@ -182,13 +183,28 @@ uint8_t getVccLevel()
   Serial.println(percent);
   Serial.println('\r');
   #endif
+  node.sendBatteryLevel(percent);
   return percent;
+}
+
+uint16_t measureBattery()
+{
+  static uint16_t lastVcc = 0;
+  
+  uint16_t thisVcc = readVcc();
+  if(thisVcc != lastVcc)
+  {
+    node.send(msgVolt.set(readVcc(), 1));
+    lastVcc = thisVcc;
+  }
+  
 }
 /**
 * Measure remaining voltage in battery in millivolts
 *
 * From http://www.seeedstudio.com/wiki/DevDuino_Sensor_Node_V2.0_(ATmega_328)#Measurement_voltage_power
 */
+
 uint16_t readVcc()
 {
   // Read 1.1V reference against AVcc
@@ -215,4 +231,6 @@ uint16_t readVcc()
   Serial.println('\r');
   #endif
   return (uint16_t)result; // Vcc in millivolts
+  
 }
+

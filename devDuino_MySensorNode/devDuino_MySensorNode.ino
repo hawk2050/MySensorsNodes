@@ -30,14 +30,14 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-#define SLEEP_TIME 120000
+#define SLEEP_TIME 300000
 
-#define NODE_ID 6
+#define NODE_ID 5
 
 #define DEBUG 0
 
 #define LIGHT_LEVEL_ENABLE 0
-#define MCP9700_ENABLE 0
+#define MCP9700_ENABLE 1
 #define DALLAS_ENABLE 1
 
 #define CHILD_ID_VOLTAGE 3
@@ -113,7 +113,7 @@ void setup()
   
   node.begin(NULL,NODE_ID);
   analogReference(INTERNAL);
-  node.sendSketchInfo("devduino-temp-sensor", "0.2");
+  node.sendSketchInfo("devduino-temp-sensor", "0.3");
   
   node.present(CHILD_ID_VOLTAGE, S_CUSTOM);
   // Register all sensors to gateway (they will be created as child devices)

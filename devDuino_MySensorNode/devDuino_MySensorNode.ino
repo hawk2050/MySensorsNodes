@@ -30,12 +30,15 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
+#define SLEEP_TIME 120000
+
+#define NODE_ID 6
+
 #define DEBUG 0
 
 #define LIGHT_LEVEL_ENABLE 0
 #define MCP9700_ENABLE 0
-
-#define SLEEP_TIME 10000
+#define DALLAS_ENABLE 1
 
 #define CHILD_ID_VOLTAGE 3
 #define CHILD_ID_MCP9700_TEMP 2
@@ -57,11 +60,25 @@
 /*****************************/
 #if MCP9700_ENABLE
 float readMCP9700Temp();
+MyMessage msgMCP9700Temp(CHILD_ID_MCP9700_TEMP, V_TEMP);
 #endif
-void readDS18B20();
-uint16_t measureBattery();
-uint8_t getBatteryPercent();
+
+#if LIGHT_LEVEL_ENABLE
 void readLDRLightLevel();
+MyMessage msgLightLevel(CHILD_ID_LIGHT, V_LIGHT_LEVEL);
+#endif
+
+#if DALLAS_ENABLE
+void readDS18B20();
+MyMessage msgDallasTemp(CHILD_ID_DALLAS_TEMP, V_TEMP);
+#endif
+
+uint16_t measureBattery();
+MyMessage msgVolt(CHILD_ID_VOLTAGE, V_VOLTAGE); 
+
+uint8_t getBatteryPercent();
+
+
 uint16_t readVcc();
 
 
@@ -72,14 +89,8 @@ boolean metric = true;
 /********* GLOBAL VARIABLES *********/
 /************************************/
 MySensor node(RF24_CE_pin, RF24_CS_pin);
-#if MCP9700_ENABLE
-MyMessage msgMCP9700Temp(CHILD_ID_MCP9700_TEMP, V_TEMP);
-#endif
-MyMessage msgDallasTemp(CHILD_ID_DALLAS_TEMP, V_TEMP);
-#if LIGHT_LEVEL_ENABLE
-MyMessage msgLightLevel(CHILD_ID_LIGHT, V_LIGHT_LEVEL);
-#endif
-MyMessage msgVolt(CHILD_ID_VOLTAGE, V_VOLTAGE); 
+
+
 
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ONE_WIRE_BUS);
@@ -94,14 +105,26 @@ DeviceAddress insideThermometer;
 /**********************************/
 void setup()
 {
+  
+  /*
+  ** Auto Node numbering
   node.begin();
+  */
+  
+  node.begin(NULL,NODE_ID);
   analogReference(INTERNAL);
   node.sendSketchInfo("devduino-temp-sensor", "0.2");
+  
+  node.present(CHILD_ID_VOLTAGE, S_CUSTOM);
   // Register all sensors to gateway (they will be created as child devices)
-  #if MCP9700_ENABLE
+#if MCP9700_ENABLE
   node.present(CHILD_ID_MCP9700_TEMP, S_TEMP);
-  #endif
+#endif
+
+#if DALLAS_ENABLE
   node.present(CHILD_ID_DALLAS_TEMP, S_TEMP);
+#endif
+
 #if LIGHT_LEVEL_ENABLE
   node.present(CHILD_ID_LIGHT, S_LIGHT_LEVEL);
 #endif
@@ -112,7 +135,18 @@ void loop()
   // Process incoming messages (like config from server)
   node.process();
   measureBattery();
+  
+  #if LIGHT_LEVEL_ENABLE
+  readLDRLightLevel();
+  #endif
+  
+  #if MCP9700_ENABLE
+  readMCP9700Temp();
+  #endif
+  
+  #if DALLAS_ENABLE
   readDS18B20();
+  #endif
   
 
   node.sleep(SLEEP_TIME);
@@ -135,10 +169,10 @@ void readDS18B20()
 }
 
 
-
+#if LIGHT_LEVEL_ENABLE
 void readLDRLightLevel()
 {
-#if LIGHT_LEVEL_ENABLE
+
   static int lastLightLevel = 0;
   int lightLevel = (1023-analogRead(LIGHT_SENSOR_ANALOG_PIN))/10.23;
   if (lightLevel != lastLightLevel)
@@ -146,18 +180,19 @@ void readLDRLightLevel()
       node.send(msgLightLevel.set(lightLevel));
       lastLightLevel = lightLevel;
   }
-#endif  
+ 
 }
-
+#endif
 
 /**
 * Read the temperature from MCP9700
 */
 
-
-void readMCP9700Temp() 
-{
 #if MCP9700_ENABLE
+float readMCP9700Temp() 
+{
+
+static float lastTemp = -200.0;
   float temp = analogRead(MCP9700_pin)*3.3/1024.0;
   temp = temp - 0.5;
   temp = temp / 0.01;
@@ -166,10 +201,15 @@ void readMCP9700Temp()
   Serial.println(temp);
   Serial.println('\r');
   #endif
-  node.send(msgMCP9700Temp.set(temp, 1));
-#endif  
+  if (temp != lastTemp)
+  {
+    node.send(msgMCP9700Temp.set(temp, 1));
+    lastTemp = temp;
+  }
+  return temp;
+  
 }
-
+#endif
 /**
 * Get the percentage of power in the battery
 */
@@ -197,6 +237,7 @@ uint16_t measureBattery()
     node.send(msgVolt.set(readVcc(), 1));
     lastVcc = thisVcc;
   }
+  return thisVcc;
   
 }
 /**

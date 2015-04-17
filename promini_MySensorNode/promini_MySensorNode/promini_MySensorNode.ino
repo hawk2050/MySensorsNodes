@@ -119,7 +119,7 @@ void setup()
   
   node.begin(NULL,NODE_ID);
   analogReference(INTERNAL);
-  node.sendSketchInfo("devduino-temp-sensor", "0.3");
+  node.sendSketchInfo("promini-temp-sensor", "0.1");
   
   node.present(CHILD_ID_VOLTAGE, S_CUSTOM);
   // Register all sensors to gateway (they will be created as child devices)

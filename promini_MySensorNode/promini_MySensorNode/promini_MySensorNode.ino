@@ -19,7 +19,7 @@
 * Tomas Hozza <thozza@gmail.com>
 *
 * MySensors library - http://www.mysensors.org/
-* DevDuino v2.0 - http://www.seeedstudio.com/wiki/DevDuino_Sensor_Node_V2.0_(ATmega_328)
+* 
 * nRF24L01+ spec - https://www.sparkfun.com/datasheets/Wireless/Nordic/nRF24L01P_Product_Specification_1_0.pdf
 */
 #include <MyMessage.h>
@@ -30,18 +30,17 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-#define SLEEP_TIME 300000
+#define SLEEP_TIME 10000
 
 #define NODE_ID 7
 
 #define DEBUG 0
 
 #define LIGHT_LEVEL_ENABLE 0
-#define MCP9700_ENABLE 0
+
 #define DALLAS_ENABLE 1
 
 #define CHILD_ID_VOLTAGE 3
-#define CHILD_ID_MCP9700_TEMP 2
 #define CHILD_ID_DALLAS_TEMP 1
 #define CHILD_ID_LIGHT 0
 
@@ -55,14 +54,11 @@
 #define ONE_WIRE_BUS 3
 #define RF24_CE_pin 8
 #define RF24_CS_pin 7
-#define MCP9700_pin A3
+
 /*****************************/
 /********* FUNCTIONS *********/
 /*****************************/
-#if MCP9700_ENABLE
-float readMCP9700Temp();
-MyMessage msgMCP9700Temp(CHILD_ID_MCP9700_TEMP, V_TEMP);
-#endif
+
 
 #if LIGHT_LEVEL_ENABLE
 void readLDRLightLevel();
@@ -78,8 +74,6 @@ uint16_t measureBattery();
 MyMessage msgVolt(CHILD_ID_VOLTAGE, V_VOLTAGE); 
 
 uint8_t getBatteryPercent();
-
-
 uint16_t readVcc();
 
 
@@ -92,8 +86,6 @@ uint8_t loopCount = 0;
 /********* GLOBAL VARIABLES *********/
 /************************************/
 MySensor node(RF24_CE_pin, RF24_CS_pin);
-
-
 
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ONE_WIRE_BUS);
@@ -116,6 +108,7 @@ void setup()
   
   pinMode(RF_POWER_REG, OUTPUT);      // sets the digital pin as output
   digitalWrite(RF_POWER_REG, HIGH);   // Apply power to the nRF24L01 adapter board
+  delay(100); //wait 100ms for power to stabilise to radio
   
   node.begin(NULL,NODE_ID);
   analogReference(INTERNAL);
@@ -123,9 +116,6 @@ void setup()
   
   node.present(CHILD_ID_VOLTAGE, S_CUSTOM);
   // Register all sensors to gateway (they will be created as child devices)
-#if MCP9700_ENABLE
-  node.present(CHILD_ID_MCP9700_TEMP, S_TEMP);
-#endif
 
 #if DALLAS_ENABLE
   node.present(CHILD_ID_DALLAS_TEMP, S_TEMP);
@@ -146,11 +136,7 @@ void loop()
   #if LIGHT_LEVEL_ENABLE
   readLDRLightLevel();
   #endif
-  
-  #if MCP9700_ENABLE
-  readMCP9700Temp();
-  #endif
-  
+    
   #if DALLAS_ENABLE
   readDS18B20();
   #endif
@@ -158,6 +144,7 @@ void loop()
   digitalWrite(RF_POWER_REG, LOW);
   node.sleep(SLEEP_TIME);
   digitalWrite(RF_POWER_REG, HIGH);
+  delay(1000);
   
   loopCount = loopCount++ & 0x3;
 }
@@ -194,32 +181,7 @@ void readLDRLightLevel()
 }
 #endif
 
-/**
-* Read the temperature from MCP9700
-*/
 
-#if MCP9700_ENABLE
-float readMCP9700Temp() 
-{
-
-static float lastTemp = -200.0;
-  float temp = analogRead(MCP9700_pin)*3.3/1024.0;
-  temp = temp - 0.5;
-  temp = temp / 0.01;
-  #if DEBUG
-  Serial.print("Read Temp from MCP9700 = ");
-  Serial.println(temp);
-  Serial.println('\r');
-  #endif
-  if (temp != lastTemp || loopCount == 0)
-  {
-    node.send(msgMCP9700Temp.set(temp, 1));
-    lastTemp = temp;
-  }
-  return temp;
-  
-}
-#endif
 /**
 * Get the percentage of power in the battery
 */

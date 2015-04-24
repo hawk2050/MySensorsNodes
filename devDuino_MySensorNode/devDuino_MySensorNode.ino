@@ -32,7 +32,7 @@
 
 #define SLEEP_TIME 300000
 
-#define NODE_ID 7
+#define NODE_ID 6
 
 #define DEBUG 0
 
@@ -51,7 +51,7 @@
 #define LED_pin 9
 #define LIGHT_SENSOR_ANALOG_PIN A0
 // Data wire is plugged into port 3 on the Arduino
-#define RF_POWER_REG 2
+
 #define ONE_WIRE_BUS 3
 #define RF24_CE_pin 8
 #define RF24_CS_pin 7
@@ -114,9 +114,7 @@ void setup()
   node.begin();
   */
   
-  pinMode(RF_POWER_REG, OUTPUT);      // sets the digital pin as output
-  digitalWrite(RF_POWER_REG, HIGH);   // Apply power to the nRF24L01 adapter board
-  
+    
   node.begin(NULL,NODE_ID);
   analogReference(INTERNAL);
   node.sendSketchInfo("devduino-temp-sensor", "0.3");
@@ -155,10 +153,8 @@ void loop()
   readDS18B20();
   #endif
   
-  digitalWrite(RF_POWER_REG, LOW);
   node.sleep(SLEEP_TIME);
-  digitalWrite(RF_POWER_REG, HIGH);
-  
+   
   loopCount = loopCount++ & 0x3;
 }
 

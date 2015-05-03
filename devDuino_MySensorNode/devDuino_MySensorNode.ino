@@ -21,7 +21,14 @@
 * MySensors library - http://www.mysensors.org/
 * DevDuino v2.0 - http://www.seeedstudio.com/wiki/DevDuino_Sensor_Node_V2.0_(ATmega_328)
 * nRF24L01+ spec - https://www.sparkfun.com/datasheets/Wireless/Nordic/nRF24L01P_Product_Specification_1_0.pdf
-*/
+*
+Hardware Connections (Breakoutboard to Arduino):
+ -VCC = 3.3V
+ -GND = GND
+ -SDA = A4 (use inline 10k resistor if your board is 5V)
+ -SCL = A5 (use inline 10k resistor if your board is 5V)
+
+ */
 #include <MyMessage.h>
 #include <MySensor.h>
 #include <SPI.h>
@@ -30,16 +37,23 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
+
+#include <Wire.h>
+#include "HTU21D.h"
+
 #define SLEEP_TIME 300000
 
-#define NODE_ID 6
+#define NODE_ID 5
 
 #define DEBUG 0
 
 #define LIGHT_LEVEL_ENABLE 0
 #define MCP9700_ENABLE 0
-#define DALLAS_ENABLE 1
+#define DALLAS_ENABLE 0
+#define HTU21D_ENABLE 1
 
+#define CHILD_ID_HTU21D_HUMIDITY 5
+#define CHILD_ID_HTU21D_TEMP 4
 #define CHILD_ID_VOLTAGE 3
 #define CHILD_ID_MCP9700_TEMP 2
 #define CHILD_ID_DALLAS_TEMP 1
@@ -59,6 +73,13 @@
 /*****************************/
 /********* FUNCTIONS *********/
 /*****************************/
+#if HTU21D_ENABLE
+//Create an instance of the object
+HTU21D myHumidity;
+MyMessage msgHum(CHILD_ID_HTU21D_HUMIDITY, V_HUM);
+MyMessage msgTemp(CHILD_ID_HTU21D_TEMP, V_TEMP);
+#endif
+
 #if MCP9700_ENABLE
 float readMCP9700Temp();
 MyMessage msgMCP9700Temp(CHILD_ID_MCP9700_TEMP, V_TEMP);
@@ -94,7 +115,7 @@ uint8_t loopCount = 0;
 MySensor node(RF24_CE_pin, RF24_CS_pin);
 
 
-
+#if DALLAS_ENABLE
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ONE_WIRE_BUS);
 
@@ -103,6 +124,8 @@ DallasTemperature dallas_sensor(&oneWire);
 
 // arrays to hold device address
 DeviceAddress insideThermometer;
+
+#endif
 /**********************************/
 /********* IMPLEMENTATION *********/
 /**********************************/
@@ -117,7 +140,7 @@ void setup()
     
   node.begin(NULL,NODE_ID);
   analogReference(INTERNAL);
-  node.sendSketchInfo("devduino-temp-sensor", "0.3");
+  node.sendSketchInfo("devduino-temp-humidity-sensor", "0.3");
   
   node.present(CHILD_ID_VOLTAGE, S_CUSTOM);
   // Register all sensors to gateway (they will be created as child devices)
@@ -131,6 +154,12 @@ void setup()
 
 #if LIGHT_LEVEL_ENABLE
   node.present(CHILD_ID_LIGHT, S_LIGHT_LEVEL);
+#endif
+
+#if HTU21D_ENABLE
+  myHumidity.begin();
+  node.present(CHILD_ID_HTU21D_HUMIDITY, S_HUM);
+  node.present(CHILD_ID_HTU21D_TEMP, S_TEMP);
 #endif
   
 }
@@ -153,11 +182,44 @@ void loop()
   readDS18B20();
   #endif
   
+  #if HTU21D_ENABLE
+  readHTU21DTemperature();
+  readHTU21DHumidity();  
+  #endif
+  
   node.sleep(SLEEP_TIME);
    
   loopCount = loopCount++ & 0x3;
 }
 
+#if HTU21D_ENABLE
+void readHTU21DTemperature()
+{
+  static float lastTemp = 0;
+  float temp = myHumidity.readTemperature();
+  
+  if(lastTemp != temp)
+  {
+    node.send(msgTemp.set(temp,1));
+    lastTemp = temp;
+  }
+}
+
+void readHTU21DHumidity()
+{
+  static float lastHumidity = 0;
+  float humd = myHumidity.readHumidity();
+  
+  if(lastHumidity != humd)
+  {
+    node.send(msgHum.set(humd,1));
+    lastHumidity = humd;
+  }
+}
+#endif
+
+
+#if DALLAS_ENABLE
 void readDS18B20()
 {
   static float lastTemperature = -200.1;
@@ -173,6 +235,7 @@ void readDS18B20()
     lastTemperature = temperature;
   }
 }
+#endif
 
 
 #if LIGHT_LEVEL_ENABLE

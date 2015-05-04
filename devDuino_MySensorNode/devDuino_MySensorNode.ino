@@ -41,6 +41,9 @@ Hardware Connections (Breakoutboard to Arduino):
 #include <Wire.h>
 #include "HTU21D.h"
 
+// FORCE_TRANSMIT_INTERVAL, this number of times of wakeup, the sensor is forced to report all values to 
+// the controller
+#define FORCE_TRANSMIT_INTERVAL 6 
 #define SLEEP_TIME 300000
 
 #define NODE_ID 5
@@ -99,15 +102,13 @@ uint16_t measureBattery();
 MyMessage msgVolt(CHILD_ID_VOLTAGE, V_VOLTAGE); 
 
 uint8_t getBatteryPercent();
-
-
 uint16_t readVcc();
-
+void switchClock(unsigned char clk);
+bool highfreq = true;
 
 float lastTemperature;
 boolean receivedConfig = false;
 boolean metric = true; 
-
 uint8_t loopCount = 0;
 /************************************/
 /********* GLOBAL VARIABLES *********/
@@ -136,9 +137,12 @@ void setup()
   ** Auto Node numbering
   node.begin();
   */
+  #ifdef NODE_ID
+  node.begin(NULL,NODE_ID,false);
+  #else
+  node.begin(NULL,AUTO,false);
+  #endif
   
-    
-  node.begin(NULL,NODE_ID);
   analogReference(INTERNAL);
   node.sendSketchInfo("devduino-temp-humidity-sensor", "0.3");
   
@@ -165,10 +169,20 @@ void setup()
 }
 void loop() 
 {
+  loopCount ++;
+  bool forceTransmit = false;
   
+  // When we wake up the 5th time after power on, switch to 1Mhz clock
+  // This allows us to print debug messages on startup (as serial port is dependend on oscilator settings).
+  if ((loopCount == 5) && highfreq) switchClock(1<<CLKPS2); // Switch to 1Mhz for the reminder of the sketch, save power.
+  
+  if (loopCount > FORCE_TRANSMIT_INTERVAL) { // force a transmission
+    forceTransmit = true; 
+    loopCount = 0;
+  }
   // Process incoming messages (like config from server)
   node.process();
-  measureBattery();
+  measureBattery(forceTransmit);
   
   #if LIGHT_LEVEL_ENABLE
   readLDRLightLevel();
@@ -183,19 +197,24 @@ void loop()
   #endif
   
   #if HTU21D_ENABLE
-  readHTU21DTemperature();
-  readHTU21DHumidity();  
+  readHTU21DTemperature(forceTransmit);
+  readHTU21DHumidity(forceTransmit);  
   #endif
   
   node.sleep(SLEEP_TIME);
    
-  loopCount = loopCount++ & 0x3;
+  
 }
 
 #if HTU21D_ENABLE
-void readHTU21DTemperature()
+void readHTU21DTemperature(bool force)
 {
   static float lastTemp = 0;
+  
+  if (force)
+  {
+   lastTemperature = -100;
+  }
   float temp = myHumidity.readTemperature();
   
   if(lastTemp != temp)
@@ -205,9 +224,14 @@ void readHTU21DTemperature()
   }
 }
 
-void readHTU21DHumidity()
+void readHTU21DHumidity(bool force)
 {
   static float lastHumidity = 0;
+  
+  if (force) 
+  {
+    lastHumidity = -100;
+  }
   float humd = myHumidity.readHumidity();
   
   if(lastHumidity != humd)
@@ -296,9 +320,13 @@ uint8_t getBatteryPercent()
   return percent;
 }
 
-uint16_t measureBattery()
+uint16_t measureBattery(bool force)
 {
   static uint16_t lastVcc = 0;
+  
+  if (force) {
+    lastVcc = 0;
+  }
   
   uint16_t thisVcc = readVcc();
   if(thisVcc != lastVcc || loopCount == 0)
@@ -342,5 +370,15 @@ uint16_t readVcc()
   #endif
   return (uint16_t)result; // Vcc in millivolts
   
+}
+
+void switchClock(unsigned char clk)
+{
+  cli();
+  
+  CLKPR = 1<<CLKPCE; // Set CLKPCE to enable clk switching
+  CLKPR = clk;  
+  sei();
+  highfreq = false;
 }
 

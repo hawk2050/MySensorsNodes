@@ -28,14 +28,16 @@ Hardware Connections (Breakoutboard to Arduino):
  -SDA = A4 (use inline 10k resistor if your board is 5V)
  -SCL = A5 (use inline 10k resistor if your board is 5V)
 
+Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
+
  */
 #include <MyMessage.h>
 #include <MySensor.h>
 #include <SPI.h>
 #include <stdint.h>
 #include <math.h>
-//#include <OneWire.h>
-//#include <DallasTemperature.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
 
 #include <Wire.h>
@@ -44,33 +46,34 @@ Hardware Connections (Breakoutboard to Arduino):
 // FORCE_TRANSMIT_INTERVAL, this number of times of wakeup, the sensor is forced to report all values to 
 // the controller
 #define FORCE_TRANSMIT_INTERVAL 3 
-#define SLEEP_TIME 300000
+#define SLEEP_TIME 5000
 
-//#define NODE_ID 5
-#define NODE_ID 6
+#define NODE_ID 8
 
-#define DEBUG 0
+#define DEBUG 1
 
-#define MCP9700_ENABLE 0
-#define HTU21D_ENABLE 1
+#define LIGHT_LEVEL_ENABLE 0
+#define DALLAS_ENABLE 0
+#define HTU21D_ENABLE 0
 
 #define CHILD_ID_HTU21D_HUMIDITY 5
 #define CHILD_ID_HTU21D_TEMP 4
 #define CHILD_ID_VOLTAGE 3
-#define CHILD_ID_MCP9700_TEMP 2
 
+#define CHILD_ID_DALLAS_TEMP 1
 #define CHILD_ID_LIGHT 0
 
 /***********************************/
 /********* PIN DEFINITIONS *********/
 /***********************************/
 #define LED_pin 9
-
+#define LIGHT_SENSOR_ANALOG_PIN A0
 // Data wire is plugged into port 3 on the Arduino
 
-#define RF24_CE_pin 8
-#define RF24_CS_pin 7
-#define MCP9700_pin A3
+#define ONE_WIRE_BUS 3
+#define RF24_CE_pin 7
+#define RF24_CS_pin 8
+
 /*****************************/
 /********* FUNCTIONS *********/
 /*****************************/
@@ -81,12 +84,17 @@ MyMessage msgHum(CHILD_ID_HTU21D_HUMIDITY, V_HUM);
 MyMessage msgTemp(CHILD_ID_HTU21D_TEMP, V_TEMP);
 #endif
 
-#if MCP9700_ENABLE
-float readMCP9700Temp();
-MyMessage msgMCP9700Temp(CHILD_ID_MCP9700_TEMP, V_TEMP);
+#if LIGHT_LEVEL_ENABLE
+void readLDRLightLevel(bool force);
+MyMessage msgLightLevel(CHILD_ID_LIGHT, V_LIGHT_LEVEL);
 #endif
 
-uint16_t measureBattery();
+#if DALLAS_ENABLE
+void readDS18B20(bool force);
+MyMessage msgDallasTemp(CHILD_ID_DALLAS_TEMP, V_TEMP);
+#endif
+
+uint16_t measureBattery(bool force);
 MyMessage msgVolt(CHILD_ID_VOLTAGE, V_VOLTAGE); 
 
 uint8_t getBatteryPercent();
@@ -104,6 +112,17 @@ uint8_t loopCount = 0;
 MySensor node(RF24_CE_pin, RF24_CS_pin);
 
 
+#if DALLAS_ENABLE
+// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
+OneWire oneWire(ONE_WIRE_BUS);
+
+// Pass our oneWire reference to Dallas Temperature. 
+DallasTemperature dallas_sensor(&oneWire);
+
+// arrays to hold device address
+DeviceAddress insideThermometer;
+
+#endif
 /**********************************/
 /********* IMPLEMENTATION *********/
 /**********************************/
@@ -121,12 +140,17 @@ void setup()
   #endif
   
   analogReference(INTERNAL);
-  node.sendSketchInfo("devduino-temp-humidity-sensor", "0.4");
+  node.sendSketchInfo("ceechv1-temp-hum", "0.4");
   
   node.present(CHILD_ID_VOLTAGE, S_CUSTOM);
   // Register all sensors to gateway (they will be created as child devices)
-#if MCP9700_ENABLE
-  node.present(CHILD_ID_MCP9700_TEMP, S_TEMP);
+
+#if DALLAS_ENABLE
+  node.present(CHILD_ID_DALLAS_TEMP, S_TEMP);
+#endif
+
+#if LIGHT_LEVEL_ENABLE
+  node.present(CHILD_ID_LIGHT, S_LIGHT_LEVEL);
 #endif
 
 #if HTU21D_ENABLE
@@ -143,10 +167,10 @@ void loop()
   
   // When we wake up the 5th time after power on, switch to 1Mhz clock
   // This allows us to print debug messages on startup (as serial port is dependend on oscilator settings).
-  if ( (loopCount == 5) && highfreq)
-  {
-    switchClock(1<<CLKPS2); // Switch to 1Mhz for the reminder of the sketch, save power.
-  }
+  //if ( (loopCount == 5) && highfreq)
+  //{
+  //  switchClock(1<<CLKPS2); // Switch to 1Mhz for the reminder of the sketch, save power.
+  //}
   
   if (loopCount > FORCE_TRANSMIT_INTERVAL)
   { // force a transmission
@@ -157,9 +181,12 @@ void loop()
   node.process();
   measureBattery(forceTransmit);
   
-   
-  #if MCP9700_ENABLE
-  readMCP9700Temp();
+  #if LIGHT_LEVEL_ENABLE
+  readLDRLightLevel(forceTransmit);
+  #endif
+  
+   #if DALLAS_ENABLE
+  readDS18B20(forceTransmit);
   #endif
   
   #if HTU21D_ENABLE
@@ -209,33 +236,52 @@ void readHTU21DHumidity(bool force)
 #endif
 
 
-
-/**
-* Read the temperature from MCP9700
-*/
-
-#if MCP9700_ENABLE
-float readMCP9700Temp() 
+#if DALLAS_ENABLE
+void readDS18B20(bool force)
 {
-
-static float lastTemp = -200.0;
-  float temp = analogRead(MCP9700_pin)*3.3/1024.0;
-  temp = temp - 0.5;
-  temp = temp / 0.01;
-  #if DEBUG
-  Serial.print("Read Temp from MCP9700 = ");
-  Serial.println(temp);
-  Serial.println('\r');
-  #endif
-  if (temp != lastTemp || loopCount == 0)
-  {
-    node.send(msgMCP9700Temp.set(temp, 1));
-    lastTemp = temp;
-  }
-  return temp;
+  static float lastTemperature = -200.1;
   
+  if (force) 
+  {
+    lastTemperature = -100;
+  }
+  // Fetch temperatures from Dallas sensors
+  dallas_sensor.requestTemperatures(); 
+  // Fetch and round temperature to one decimal
+  float temperature = static_cast<float>(static_cast<int>((node.getConfig().isMetric?dallas_sensor.getTempCByIndex(0):dallas_sensor.getTempFByIndex(0)) * 10.)) / 10.;
+  // Only send data if temperature has changed and no error
+  if (lastTemperature != temperature && temperature != -127.00 || loopCount == 0)
+  {
+    // Send in the new temperature
+    node.send(msgDallasTemp.set(temperature,1));
+    lastTemperature = temperature;
+  }
 }
 #endif
+
+
+#if LIGHT_LEVEL_ENABLE
+void readLDRLightLevel(bool force)
+{
+
+  static int lastLightLevel = 0;
+  
+  if (force) 
+  {
+    lastLightLevel = -100;
+  }
+  
+  int lightLevel = (1023-analogRead(LIGHT_SENSOR_ANALOG_PIN))/10.23;
+  if (lightLevel != lastLightLevel || loopCount == 0)
+  {
+      node.send(msgLightLevel.set(lightLevel));
+      lastLightLevel = lightLevel;
+  }
+ 
+}
+#endif
+
+
 /**
 * Get the percentage of power in the battery
 */

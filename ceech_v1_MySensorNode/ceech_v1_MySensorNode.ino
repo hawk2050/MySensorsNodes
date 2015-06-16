@@ -38,7 +38,7 @@ Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
 #include <math.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-
+#include <DHT.h>  
 
 #include <Wire.h>
 #include "HTU21D.h"
@@ -52,15 +52,15 @@ Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
 
 #define DEBUG 1
 
-#define LIGHT_LEVEL_ENABLE 0
-#define DALLAS_ENABLE 0
-#define HTU21D_ENABLE 0
+#define LIGHT_LEVEL_ENABLE  0
+#define DALLAS_ENABLE       0
+#define HTU21D_ENABLE       0
+#define DHT_ENABLE          1
 
-#define CHILD_ID_HTU21D_HUMIDITY 5
-#define CHILD_ID_HTU21D_TEMP 4
+#define CHILD_ID_HUMIDITY 5
+#define CHILD_ID_TEMP 4
 #define CHILD_ID_VOLTAGE 3
 
-#define CHILD_ID_DALLAS_TEMP 1
 #define CHILD_ID_LIGHT 0
 
 /***********************************/
@@ -69,19 +69,26 @@ Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
 #define LED_pin 9
 #define LIGHT_SENSOR_ANALOG_PIN A0
 // Data wire is plugged into port 3 on the Arduino
+#define HUMIDITY_SENSOR_DIGITAL_PIN 2
 
-#define ONE_WIRE_BUS 3
+//#define ONE_WIRE_BUS 3
 #define RF24_CE_pin 7
 #define RF24_CS_pin 8
 
 /*****************************/
 /********* FUNCTIONS *********/
 /*****************************/
+#if DHT_ENABLE
+DHT dht;
+MyMessage msgHum(CHILD_ID_HUMIDITY, V_HUM);
+MyMessage msgTemp(CHILD_ID_TEMP, V_TEMP);
+#endif
+
 #if HTU21D_ENABLE
 //Create an instance of the object
 HTU21D myHumidity;
-MyMessage msgHum(CHILD_ID_HTU21D_HUMIDITY, V_HUM);
-MyMessage msgTemp(CHILD_ID_HTU21D_TEMP, V_TEMP);
+MyMessage msgHum(CHILD_ID_HUMIDITY, V_HUM);
+MyMessage msgTemp(CHILD_ID_TEMP, V_TEMP);
 #endif
 
 #if LIGHT_LEVEL_ENABLE
@@ -155,8 +162,14 @@ void setup()
 
 #if HTU21D_ENABLE
   myHumidity.begin();
-  node.present(CHILD_ID_HTU21D_HUMIDITY, S_HUM);
-  node.present(CHILD_ID_HTU21D_TEMP, S_TEMP);
+  node.present(CHILD_ID_HUMIDITY, S_HUM);
+  node.present(CHILD_ID_TEMP, S_TEMP);
+#endif
+
+#if DHT_ENABLE
+  dht.setup(HUMIDITY_SENSOR_DIGITAL_PIN); 
+  node.present(CHILD_ID_HUMIDITY, S_HUM);
+  node.present(CHILD_ID_TEMP, S_TEMP);
 #endif
   
 }
@@ -197,6 +210,21 @@ void loop()
   node.sleep(SLEEP_TIME);
    
   
+}
+
+#if DHT_ENABLE
+void readDHTHumidityAndTemperature(bool force)
+{
+  static lastTemp = 0;
+  static lastHumidity = 0;
+  
+  if (force)
+  {
+    lastTemp = -100;
+  }
+  
+  float humidity = dht.getHumidity();
+  float temperature = dht.getTemperature();
 }
 
 #if HTU21D_ENABLE

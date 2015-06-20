@@ -221,11 +221,22 @@ void readDHTHumidityAndTemperature(bool force)
   if (force)
   {
     lastTemp = -100;
+    lastHumidity = -100;
   }
   
   float humidity = dht.getHumidity();
+  
+  if(!isnan(humidity)
+  {
+    if(lastHumidity != humidity)
+    {
+      node.send(msgHum.set(humd,1));
+      lastHumidity = humd;
+    }
+  }
   float temperature = dht.getTemperature();
 }
+#endif
 
 #if HTU21D_ENABLE
 void readHTU21DTemperature(bool force)

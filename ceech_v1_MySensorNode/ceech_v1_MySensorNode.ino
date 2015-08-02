@@ -48,7 +48,7 @@ Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
 #define FORCE_TRANSMIT_INTERVAL 3 
 #define SLEEP_TIME 5000
 
-#define NODE_ID 8
+#define NODE_ID 7
 
 #define DEBUG 1
 
@@ -215,23 +215,23 @@ void loop()
 #if DHT_ENABLE
 void readDHTHumidityAndTemperature(bool force)
 {
-  static lastTemp = 0;
-  static lastHumidity = 0;
+  static float lastTemp = 0;
+  static float lastHumidity = 0;
   
   if (force)
   {
-    lastTemp = -100;
-    lastHumidity = -100;
+    lastTemp = -100.0;
+    lastHumidity = -100.0;
   }
   
   float humidity = dht.getHumidity();
   
-  if(!isnan(humidity)
+  if(!isnan(humidity))
   {
     if(lastHumidity != humidity)
     {
-      node.send(msgHum.set(humd,1));
-      lastHumidity = humd;
+      node.send(msgHum.set(humidity,1));
+      lastHumidity = humidity;
     }
   }
   float temperature = dht.getTemperature();

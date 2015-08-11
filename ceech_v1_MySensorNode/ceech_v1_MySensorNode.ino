@@ -53,12 +53,13 @@ Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
 #define DEBUG 1
 
 #define LIGHT_LEVEL_ENABLE  0
-#define DALLAS_ENABLE       0
+#define DALLAS_ENABLE       1
 #define HTU21D_ENABLE       0
 #define DHT_ENABLE          1
 
 #define CHILD_ID_HUMIDITY 5
-#define CHILD_ID_TEMP 4
+#define CHILD_ID_TEMPA 4
+#define CHILD_ID_TEMPB 6
 #define CHILD_ID_VOLTAGE 3
 
 #define CHILD_ID_LIGHT 0
@@ -71,7 +72,7 @@ Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
 // Data wire is plugged into port 3 on the Arduino
 #define HUMIDITY_SENSOR_DIGITAL_PIN 2
 
-//#define ONE_WIRE_BUS 3
+#define ONE_WIRE_BUS 5
 #define RF24_CE_pin 7
 #define RF24_CS_pin 8
 
@@ -81,14 +82,14 @@ Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
 #if DHT_ENABLE
 DHT dht;
 MyMessage msgHum(CHILD_ID_HUMIDITY, V_HUM);
-MyMessage msgTemp(CHILD_ID_TEMP, V_TEMP);
+MyMessage msgTemp(CHILD_ID_TEMPA, V_TEMP);
 #endif
 
 #if HTU21D_ENABLE
 //Create an instance of the object
 HTU21D myHumidity;
 MyMessage msgHum(CHILD_ID_HUMIDITY, V_HUM);
-MyMessage msgTemp(CHILD_ID_TEMP, V_TEMP);
+MyMessage msgTemp(CHILD_ID_TEMPA, V_TEMP);
 #endif
 
 #if LIGHT_LEVEL_ENABLE
@@ -96,10 +97,6 @@ void readLDRLightLevel(bool force);
 MyMessage msgLightLevel(CHILD_ID_LIGHT, V_LIGHT_LEVEL);
 #endif
 
-#if DALLAS_ENABLE
-void readDS18B20(bool force);
-MyMessage msgDallasTemp(CHILD_ID_DALLAS_TEMP, V_TEMP);
-#endif
 
 uint16_t measureBattery(bool force);
 MyMessage msgVolt(CHILD_ID_VOLTAGE, V_VOLTAGE); 
@@ -127,7 +124,11 @@ OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature dallas_sensor(&oneWire);
 
 // arrays to hold device address
-DeviceAddress insideThermometer;
+DeviceAddress garageThermometer, freezerThermometer;
+
+void readDS18B20(DeviceAddress deviceAddress,bool force);
+MyMessage msgDallasTempGarage(CHILD_ID_TEMPA, V_TEMP);
+MyMessage msgDallasTempFreezer(CHILD_ID_TEMPB, V_TEMP);
 
 #endif
 /**********************************/
@@ -135,7 +136,8 @@ DeviceAddress insideThermometer;
 /**********************************/
 void setup()
 {
-  
+  // start serial port
+  Serial.begin(9600);
   /*
   ** Auto Node numbering
   node.begin();
@@ -153,7 +155,36 @@ void setup()
   // Register all sensors to gateway (they will be created as child devices)
 
 #if DALLAS_ENABLE
-  node.present(CHILD_ID_DALLAS_TEMP, S_TEMP);
+  dallas_sensor.begin();
+  node.present(CHILD_ID_TEMPA, S_TEMP);
+  node.present(CHILD_ID_TEMPB, S_TEMP);
+  
+  // locate devices on the bus
+  
+  Serial.print("Locating devices...");
+  Serial.print("Found ");
+  Serial.print(dallas_sensor.getDeviceCount(), DEC);
+  Serial.println(" devices.");
+  
+  // search for devices on the bus and assign based on an index.  ideally,
+  // you would do this to initially discover addresses on the bus and then 
+  // use those addresses and manually assign them (see above) once you know 
+  // the devices on your bus (and assuming they don't change).
+  // 
+  // method 1: by index
+  if (!sensors.getAddress(garageThermometer, 0))
+ {
+   Serial.println("Unable to find address for Device 0"); 
+ }
+ 
+  if (!sensors.getAddress(freezerThermometer, 1))
+ {
+   Serial.println("Unable to find address for Device 1"); 
+ }
+
+  // set the resolution to 9 bit
+  dallas_sensor.setResolution(garageThermometer, 12);
+  dallas_sensor.setResolution(freezerThermometer, 9);
 #endif
 
 #if LIGHT_LEVEL_ENABLE
@@ -163,13 +194,13 @@ void setup()
 #if HTU21D_ENABLE
   myHumidity.begin();
   node.present(CHILD_ID_HUMIDITY, S_HUM);
-  node.present(CHILD_ID_TEMP, S_TEMP);
+  node.present(CHILD_ID_TEMPA, S_TEMP);
 #endif
 
 #if DHT_ENABLE
   dht.setup(HUMIDITY_SENSOR_DIGITAL_PIN); 
   node.present(CHILD_ID_HUMIDITY, S_HUM);
-  node.present(CHILD_ID_TEMP, S_TEMP);
+  node.present(CHILD_ID_TEMPA, S_TEMP);
 #endif
   
 }
@@ -274,29 +305,33 @@ void readHTU21DHumidity(bool force)
 }
 #endif
 
-
 #if DALLAS_ENABLE
-void readDS18B20(bool force)
+void readDS18B20(DeviceAddress deviceAddress, bool force)
 {
-  static float lastTemperature = -200.1;
-  
+  static float lastTemperatureG = -200.1;
+  static float lastTemperatureF = -200.1;
   if (force) 
   {
-    lastTemperature = -100;
+    lastTemperatureG = -100;
+    lastTemperatureF = -100;
   }
-  // Fetch temperatures from Dallas sensors
-  dallas_sensor.requestTemperatures(); 
-  // Fetch and round temperature to one decimal
-  float temperature = static_cast<float>(static_cast<int>((node.getConfig().isMetric?dallas_sensor.getTempCByIndex(0):dallas_sensor.getTempFByIndex(0)) * 10.)) / 10.;
+  
+  float tempC = dallas_sensor.getTempC(deviceAddress);
+  Serial.print("Temp C: ");
+  Serial.print(tempC);
+  
   // Only send data if temperature has changed and no error
-  if (lastTemperature != temperature && temperature != -127.00 || loopCount == 0)
+  if (lastTemperature != tempC && tempC != -127.00 )
   {
     // Send in the new temperature
-    node.send(msgDallasTemp.set(temperature,1));
-    lastTemperature = temperature;
+    if (deviceAddress == garageThermometer)
+    {
+      node.send(msgDallasTemp.set(tempC,1));
+      lastTemperature = tempC;
   }
 }
 #endif
+
 
 
 #if LIGHT_LEVEL_ENABLE
@@ -311,7 +346,7 @@ void readLDRLightLevel(bool force)
   }
   
   int lightLevel = (1023-analogRead(LIGHT_SENSOR_ANALOG_PIN))/10.23;
-  if (lightLevel != lastLightLevel || loopCount == 0)
+  if (lightLevel != lastLightLevel)
   {
       node.send(msgLightLevel.set(lightLevel));
       lastLightLevel = lightLevel;
@@ -342,12 +377,13 @@ uint16_t measureBattery(bool force)
 {
   static uint16_t lastVcc = 0;
   
-  if (force) {
+  if (force)
+  {
     lastVcc = 0;
   }
   
   uint16_t thisVcc = readVcc();
-  if(thisVcc != lastVcc || loopCount == 0)
+  if(thisVcc != lastVcc)
   {
     node.send(msgVolt.set(readVcc(), 1));
     lastVcc = thisVcc;

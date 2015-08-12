@@ -47,6 +47,7 @@ Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
 // the controller
 #define FORCE_TRANSMIT_INTERVAL 3 
 #define SLEEP_TIME 5000
+#define MAX_ATTACHED_DS18B20 2
 
 #define NODE_ID 7
 
@@ -57,12 +58,18 @@ Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
 #define HTU21D_ENABLE       0
 #define DHT_ENABLE          1
 
-#define CHILD_ID_HUMIDITY 5
-#define CHILD_ID_TEMPA 4
-#define CHILD_ID_TEMPB 6
-#define CHILD_ID_VOLTAGE 3
+enum
+{
+  CHILD_ID_LIGHT = 0,
+  CHILD_ID_HTU21D_HUMIDITY,
+  CHILD_ID_HTU21D_TEMP,
+  CHILD_ID_DHT22_HUMIDITY,
+  CHILD_ID_DHT22_TEMP,
+  CHILD_ID_DALLAS_TEMP_BASE,
+  CHILD_ID_VOLTAGE = CHILD_ID_DALLAS_TEMP_BASE + MAX_ATTACHED_DS18B20
+  
+}
 
-#define CHILD_ID_LIGHT 0
 
 /***********************************/
 /********* PIN DEFINITIONS *********/
@@ -81,15 +88,15 @@ Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
 /*****************************/
 #if DHT_ENABLE
 DHT dht;
-MyMessage msgHum(CHILD_ID_HUMIDITY, V_HUM);
-MyMessage msgTemp(CHILD_ID_TEMPA, V_TEMP);
+MyMessage msgHum(CHILD_ID_DHT22_HUMIDITY, V_HUM);
+MyMessage msgTemp(CHILD_ID_DHT22_TEMP, V_TEMP);
 #endif
 
 #if HTU21D_ENABLE
 //Create an instance of the object
 HTU21D myHumidity;
-MyMessage msgHum(CHILD_ID_HUMIDITY, V_HUM);
-MyMessage msgTemp(CHILD_ID_TEMPA, V_TEMP);
+MyMessage msgHum(CHILD_ID_HTU21D_HUMIDITY, V_HUM);
+MyMessage msgTemp(CHILD_ID_HTU21D_TEMP, V_TEMP);
 #endif
 
 #if LIGHT_LEVEL_ENABLE
@@ -106,7 +113,6 @@ uint16_t readVcc();
 void switchClock(unsigned char clk);
 bool highfreq = true;
 
-float lastTemperature;
 boolean receivedConfig = false;
 boolean metric = true; 
 uint8_t loopCount = 0;
@@ -117,18 +123,19 @@ MySensor node(RF24_CE_pin, RF24_CS_pin);
 
 
 #if DALLAS_ENABLE
+
+float lastTemperature[MAX_ATTACHED_DS18B20];
+int numSensors=0;
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ONE_WIRE_BUS);
 
 // Pass our oneWire reference to Dallas Temperature. 
 DallasTemperature dallas_sensor(&oneWire);
 
-// arrays to hold device address
-DeviceAddress garageThermometer, freezerThermometer;
 
-void readDS18B20(DeviceAddress deviceAddress,bool force);
-MyMessage msgDallasTempGarage(CHILD_ID_TEMPA, V_TEMP);
-MyMessage msgDallasTempFreezer(CHILD_ID_TEMPB, V_TEMP);
+void readDS18B20(bool force);
+// Initialize temperature message
+MyMessage msgDallas(CHILD_ID_DALLAS_TEMP_BASE, V_TEMP);
 
 #endif
 /**********************************/
@@ -156,35 +163,21 @@ void setup()
 
 #if DALLAS_ENABLE
   dallas_sensor.begin();
-  node.present(CHILD_ID_TEMPA, S_TEMP);
-  node.present(CHILD_ID_TEMPB, S_TEMP);
-  
+  // Fetch the number of attached temperature sensors  
   // locate devices on the bus
   
   Serial.print("Locating devices...");
   Serial.print("Found ");
-  Serial.print(dallas_sensor.getDeviceCount(), DEC);
+  numSensors = dallas_sensor.getDeviceCount();
+  Serial.print(numSensors, DEC);
   Serial.println(" devices.");
-  
-  // search for devices on the bus and assign based on an index.  ideally,
-  // you would do this to initially discover addresses on the bus and then 
-  // use those addresses and manually assign them (see above) once you know 
-  // the devices on your bus (and assuming they don't change).
-  // 
-  // method 1: by index
-  if (!sensors.getAddress(garageThermometer, 0))
- {
-   Serial.println("Unable to find address for Device 0"); 
- }
- 
-  if (!sensors.getAddress(freezerThermometer, 1))
- {
-   Serial.println("Unable to find address for Device 1"); 
- }
 
-  // set the resolution to 9 bit
-  dallas_sensor.setResolution(garageThermometer, 12);
-  dallas_sensor.setResolution(freezerThermometer, 9);
+  // Present all sensors to controller
+  for (int i=0; i<numSensors && i<MAX_ATTACHED_DS18B20; i++)
+  {   
+     node.present(CHILD_ID_DALLAS_TEMP_BASE+i, S_TEMP);
+  }
+  
 #endif
 
 #if LIGHT_LEVEL_ENABLE
@@ -306,28 +299,33 @@ void readHTU21DHumidity(bool force)
 #endif
 
 #if DALLAS_ENABLE
-void readDS18B20(DeviceAddress deviceAddress, bool force)
+void readDS18B20(bool force)
 {
-  static float lastTemperatureG = -200.1;
-  static float lastTemperatureF = -200.1;
   if (force) 
   {
-    lastTemperatureG = -100;
-    lastTemperatureF = -100;
-  }
-  
-  float tempC = dallas_sensor.getTempC(deviceAddress);
-  Serial.print("Temp C: ");
-  Serial.print(tempC);
-  
-  // Only send data if temperature has changed and no error
-  if (lastTemperature != tempC && tempC != -127.00 )
-  {
-    // Send in the new temperature
-    if (deviceAddress == garageThermometer)
+    for (int i=0; i<numSensors && i<MAX_ATTACHED_DS18B20; i++)
     {
-      node.send(msgDallasTemp.set(tempC,1));
-      lastTemperature = tempC;
+      lastTemperature[i] = -100.0;
+    }
+  }
+  // Fetch temperatures from Dallas sensors
+  dallas_sensor.requestTemperatures(); 
+  
+  // Read temperatures and send them to controller 
+  for (int i=0; i<numSensors && i<MAX_ATTACHED_DS18B20; i++)
+  {
+ 
+    // Fetch and round temperature to one decimal
+    float temperature = static_cast<float>(static_cast<int>((node.getConfig().isMetric ? dallas_sensor.getTempCByIndex(i) : dallas_sensor.getTempFByIndex(i)) * 10.)) / 10.;
+ 
+    // Only send data if temperature has changed and no error
+    if (lastTemperature[i] != temperature && temperature != -127.00)
+    {
+ 
+      // Send in the new temperature
+      node.send(msgDallas.setSensor(i).set(temperature,1));
+      lastTemperature[i]=temperature;
+    }
   }
 }
 #endif

@@ -31,11 +31,18 @@ Hardware Connections (Breakoutboard to Arduino):
 Mys_v1.1 board compatible with Arduino PRO Mini 3.3V@8MHz
 
  */
-//#include <MyMessage.h>
+
 #include <MySensor.h>
 #include <SPI.h>
 #include <stdint.h>
 #include <math.h>
+
+#define API_v15
+
+#ifdef API_v15
+#include <MyHwATMega328.h>
+#include <MyTransportNRF24.h>
+#endif
 
 
 // FORCE_TRANSMIT_INTERVAL, this number of times of wakeup, the sensor is forced to report all values to 
@@ -46,7 +53,7 @@ Mys_v1.1 board compatible with Arduino PRO Mini 3.3V@8MHz
 
 #define NODE_ID 7
 
-#define DEBUG 1
+#define DEBUG_RCC 1
 
 #define LIGHT_LEVEL_ENABLE  0
 #define DALLAS_ENABLE       0
@@ -81,8 +88,8 @@ enum sensor_id
  * creating an instance of the Mysensors class. Other defaults will include
  * transmitting on channel 76 with a data rate of 250kbps.
  */
-#define RF24_CE_pin 9
-#define RF24_CS_pin 10
+#define RF24_CE_PIN 9
+#define RF24_CS_PIN 10
 
 /*****************************/
 /********* FUNCTIONS *********/
@@ -123,7 +130,18 @@ uint8_t loopCount = 0;
 /************************************/
 /********* GLOBAL VARIABLES *********/
 /************************************/
+#ifdef API_v15
+MyTransportNRF24 transport(RF24_CE_PIN, RF24_CS_PIN, RF24_PA_LEVEL_GW);
+/*We're also tried to make the MySensors class hardware independent by introducing hardware profiles. 
+ * They handle platform dependent things like sleeping, storage (EEPROM), watchdog, serial in- and output. 
+ * Currently there is only one implementation for the ATMega328p (which also works fine for AtMega 2560)
+ *Construct the class like this:
+  */
+MyHwATMega328 hw;
+MySensor node(transport,hw);
+#else
 MySensor node;
+#endif
 
 
 #if DALLAS_ENABLE
@@ -368,7 +386,7 @@ uint8_t getBatteryPercent()
   static const float full_battery_v = 3169.0;
   float level = readVcc() / full_battery_v;
   uint8_t percent = level * 100;
-  #if DEBUG
+  #if DEBUG_RCC
   Serial.print("Battery state = ");
   Serial.println(percent);
   Serial.println('\r');
@@ -421,7 +439,7 @@ uint16_t readVcc()
   uint8_t high = ADCH; // unlocks both
   long result = (high<<8) | low;
   result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
-  #if DEBUG
+  #if DEBUG_RCC
   Serial.print("Read Vcc = ");
   Serial.println(result);
   Serial.println('\r');

@@ -28,10 +28,10 @@ Hardware Connections (Breakoutboard to Arduino):
  -SDA = A4 (use inline 10k resistor if your board is 5V)
  -SCL = A5 (use inline 10k resistor if your board is 5V)
 
-Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
+Mys_v1.1 board compatible with Arduino PRO Mini 3.3V@8MHz
 
  */
-#include <MyMessage.h>
+//#include <MyMessage.h>
 #include <MySensor.h>
 #include <SPI.h>
 #include <stdint.h>
@@ -75,6 +75,12 @@ enum sensor_id
 #define HUMIDITY_SENSOR_DIGITAL_PIN 2
 
 #define ONE_WIRE_BUS 5
+
+/*These are actually the default pins expected by the MySensors framework.
+ * This means we can use the default constructor without arguments when 
+ * creating an instance of the Mysensors class. Other defaults will include
+ * transmitting on channel 76 with a data rate of 250kbps.
+ */
 #define RF24_CE_pin 9
 #define RF24_CS_pin 10
 
@@ -117,7 +123,7 @@ uint8_t loopCount = 0;
 /************************************/
 /********* GLOBAL VARIABLES *********/
 /************************************/
-MySensor node(RF24_CE_pin, RF24_CS_pin);
+MySensor node;
 
 
 #if DALLAS_ENABLE

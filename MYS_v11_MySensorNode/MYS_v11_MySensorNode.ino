@@ -155,7 +155,7 @@ void setup()
   #endif
   
   analogReference(INTERNAL);
-  node.sendSketchInfo("ceechv1-temp-hum", "0.4");
+  node.sendSketchInfo("mys_v11-temp-hum", "0.4");
   
   node.present(CHILD_ID_VOLTAGE, S_CUSTOM);
   // Register all sensors to gateway (they will be created as child devices)
@@ -203,10 +203,11 @@ void loop()
   
   // When we wake up the 5th time after power on, switch to 1Mhz clock
   // This allows us to print debug messages on startup (as serial port is dependend on oscilator settings).
-  //if ( (loopCount == 5) && highfreq)
-  //{
-  //  switchClock(1<<CLKPS2); // Switch to 1Mhz for the reminder of the sketch, save power.
-  //}
+  // Switch to 1Mhz for the reminder of the sketch, save power and allow operation down to 1.8V
+  if ( (loopCount == 5) && highfreq)
+  {
+    switchClock(1<<CLKPS1); //should divide by 4 giving 4MHz operation
+  }
   
   if (loopCount > FORCE_TRANSMIT_INTERVAL)
   { // force a transmission

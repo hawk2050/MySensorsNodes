@@ -45,6 +45,7 @@ Hardware Connections (Breakoutboard to Arduino):
 // the controller
 #define FORCE_TRANSMIT_INTERVAL 3 
 #define SLEEP_TIME 300000
+#define MAX_ATTACHED_DS18B20 2
 
 //#define NODE_ID 5
 #define NODE_ID 6
@@ -54,12 +55,20 @@ Hardware Connections (Breakoutboard to Arduino):
 #define MCP9700_ENABLE 0
 #define HTU21D_ENABLE 1
 
-#define CHILD_ID_HTU21D_HUMIDITY 5
-#define CHILD_ID_HTU21D_TEMP 4
-#define CHILD_ID_VOLTAGE 3
-#define CHILD_ID_MCP9700_TEMP 2
+enum sensor_id
+{
+  CHILD_ID_LIGHT = 0,
+  CHILD_ID_HTU21D_HUMIDITY,
+  CHILD_ID_HTU21D_TEMP,
+  CHILD_ID_DHT22_HUMIDITY,
+  CHILD_ID_DHT22_TEMP,
+  CHILD_ID_MCP9700_TEMP,
+  CHILD_ID_DALLAS_TEMP_BASE,
+  CHILD_ID_VOLTAGE = CHILD_ID_DALLAS_TEMP_BASE + MAX_ATTACHED_DS18B20
+  
+};
 
-#define CHILD_ID_LIGHT 0
+
 
 /***********************************/
 /********* PIN DEFINITIONS *********/

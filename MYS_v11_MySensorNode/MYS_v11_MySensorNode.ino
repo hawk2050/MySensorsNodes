@@ -36,12 +36,7 @@ Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
 #include <SPI.h>
 #include <stdint.h>
 #include <math.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
-#include <DHT.h>  
 
-#include <Wire.h>
-#include "HTU21D.h"
 
 // FORCE_TRANSMIT_INTERVAL, this number of times of wakeup, the sensor is forced to report all values to 
 // the controller
@@ -54,11 +49,11 @@ Ceech Board v1 Compatible with Arduino PRO 3.3V@8MHz
 #define DEBUG 1
 
 #define LIGHT_LEVEL_ENABLE  0
-#define DALLAS_ENABLE       1
-#define HTU21D_ENABLE       0
-#define DHT_ENABLE          1
+#define DALLAS_ENABLE       0
+#define HTU21D_ENABLE       1
+#define DHT_ENABLE          0
 
-enum
+enum sensor_id
 {
   CHILD_ID_LIGHT = 0,
   CHILD_ID_HTU21D_HUMIDITY,
@@ -68,7 +63,7 @@ enum
   CHILD_ID_DALLAS_TEMP_BASE,
   CHILD_ID_VOLTAGE = CHILD_ID_DALLAS_TEMP_BASE + MAX_ATTACHED_DS18B20
   
-}
+};
 
 
 /***********************************/
@@ -80,19 +75,22 @@ enum
 #define HUMIDITY_SENSOR_DIGITAL_PIN 2
 
 #define ONE_WIRE_BUS 5
-#define RF24_CE_pin 7
-#define RF24_CS_pin 8
+#define RF24_CE_pin 9
+#define RF24_CS_pin 10
 
 /*****************************/
 /********* FUNCTIONS *********/
 /*****************************/
 #if DHT_ENABLE
+#include "DHT.h"
 DHT dht;
 MyMessage msgHum(CHILD_ID_DHT22_HUMIDITY, V_HUM);
 MyMessage msgTemp(CHILD_ID_DHT22_TEMP, V_TEMP);
 #endif
 
 #if HTU21D_ENABLE
+#include <Wire.h>
+#include "HTU21D.h"
 //Create an instance of the object
 HTU21D myHumidity;
 MyMessage msgHum(CHILD_ID_HTU21D_HUMIDITY, V_HUM);
@@ -123,7 +121,8 @@ MySensor node(RF24_CE_pin, RF24_CS_pin);
 
 
 #if DALLAS_ENABLE
-
+#include <OneWire.h>
+#include <DallasTemperature.h>
 float lastTemperature[MAX_ATTACHED_DS18B20];
 int numSensors=0;
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
@@ -186,14 +185,14 @@ void setup()
 
 #if HTU21D_ENABLE
   myHumidity.begin();
-  node.present(CHILD_ID_HUMIDITY, S_HUM);
-  node.present(CHILD_ID_TEMPA, S_TEMP);
+  node.present(CHILD_ID_HTU21D_HUMIDITY, S_HUM);
+  node.present(CHILD_ID_HTU21D_TEMP, S_TEMP);
 #endif
 
 #if DHT_ENABLE
   dht.setup(HUMIDITY_SENSOR_DIGITAL_PIN); 
-  node.present(CHILD_ID_HUMIDITY, S_HUM);
-  node.present(CHILD_ID_TEMPA, S_TEMP);
+  node.present(CHILD_ID_DHT22_HUMIDITY, S_HUM);
+  node.present(CHILD_ID_DHT22_TEMP, S_TEMP);
 #endif
   
 }
@@ -269,7 +268,7 @@ void readHTU21DTemperature(bool force)
   
   if (force)
   {
-   lastTemperature = -100;
+   lastTemp = -100;
   }
   float temp = myHumidity.readTemperature();
   

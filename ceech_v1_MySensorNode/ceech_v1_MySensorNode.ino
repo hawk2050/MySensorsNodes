@@ -270,7 +270,7 @@ void readHTU21DTemperature(bool force)
   
   if (force)
   {
-   lastTemperature = -100;
+   lastTemp = -100;
   }
   float temp = myHumidity.readTemperature();
   

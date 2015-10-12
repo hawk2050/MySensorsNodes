@@ -28,14 +28,21 @@ Hardware Connections (Breakoutboard to Arduino):
  -SDA = A4 (use inline 10k resistor if your board is 5V)
  -SCL = A5 (use inline 10k resistor if your board is 5V)
 
+ System clock is 16MHz
+
  */
 #include <MyMessage.h>
 #include <MySensor.h>
 #include <SPI.h>
 #include <stdint.h>
 #include <math.h>
-//#include <OneWire.h>
-//#include <DallasTemperature.h>
+
+#define API_v15
+
+#ifdef API_v15
+#include <MyHwATMega328.h>
+#include <MyTransportNRF24.h>
+#endif
 
 
 #include <Wire.h>
@@ -50,7 +57,7 @@ Hardware Connections (Breakoutboard to Arduino):
 //#define NODE_ID 5
 #define NODE_ID 6
 
-#define DEBUG 0
+#define DEBUG_RCC 0
 
 #define MCP9700_ENABLE 0
 #define HTU21D_ENABLE 1
@@ -77,9 +84,9 @@ enum sensor_id
 
 // Data wire is plugged into port 3 on the Arduino
 
-#define RF24_CE_pin 8
-#define RF24_CS_pin 7
-#define MCP9700_pin A3
+#define RF24_CE_PIN 8
+#define RF24_CS_PIN 7
+#define MCP9700_PIN A3
 /*****************************/
 /********* FUNCTIONS *********/
 /*****************************/
@@ -110,7 +117,19 @@ uint8_t loopCount = 0;
 /************************************/
 /********* GLOBAL VARIABLES *********/
 /************************************/
-MySensor node(RF24_CE_pin, RF24_CS_pin);
+#ifdef API_v15
+MyTransportNRF24 transport(RF24_CE_PIN, RF24_CS_PIN, RF24_PA_LEVEL_GW);
+/*We're also tried to make the MySensors class hardware independent by introducing hardware profiles. 
+ * They handle platform dependent things like sleeping, storage (EEPROM), watchdog, serial in- and output. 
+ * Currently there is only one implementation for the ATMega328p (which also works fine for AtMega 2560)
+ *Construct the class like this:
+  */
+MyHwATMega328 hw;
+MySensor node(transport,hw);
+#else
+MySensor node(RF24_CE_PIN, RF24_CS_PIN);
+#endif
+
 
 
 /**********************************/
@@ -154,7 +173,11 @@ void loop()
   // This allows us to print debug messages on startup (as serial port is dependend on oscilator settings).
   if ( (loopCount == 5) && highfreq)
   {
-    switchClock(1<<CLKPS2); // Switch to 1Mhz for the reminder of the sketch, save power.
+    /* Switch to 1Mhz by setting clock prescaler to divide by 16 for the reminder of the sketch, 
+     * to save power but more importantly to allow operation down to 1.8V
+     * 
+      */
+    switchClock(1<<CLKPS2); 
   }
   
   if (loopCount > FORCE_TRANSMIT_INTERVAL)
@@ -228,10 +251,10 @@ float readMCP9700Temp()
 {
 
 static float lastTemp = -200.0;
-  float temp = analogRead(MCP9700_pin)*3.3/1024.0;
+  float temp = analogRead(MCP9700_PIN)*3.3/1024.0;
   temp = temp - 0.5;
   temp = temp / 0.01;
-  #if DEBUG
+  #if DEBUG_RCC
   Serial.print("Read Temp from MCP9700 = ");
   Serial.println(temp);
   Serial.println('\r');
@@ -253,7 +276,7 @@ uint8_t getBatteryPercent()
   static const float full_battery_v = 3169.0;
   float level = readVcc() / full_battery_v;
   uint8_t percent = level * 100;
-  #if DEBUG
+  #if DEBUG_RCC
   Serial.print("Battery state = ");
   Serial.println(percent);
   Serial.println('\r');
@@ -305,7 +328,7 @@ uint16_t readVcc()
   uint8_t high = ADCH; // unlocks both
   long result = (high<<8) | low;
   result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
-  #if DEBUG
+  #if DEBUG_RCC
   Serial.print("Read Vcc = ");
   Serial.println(result);
   Serial.println('\r');

@@ -30,6 +30,8 @@ Hardware Connections (Breakoutboard to Arduino):
 
 Mys_v1.1 board compatible with Arduino PRO Mini 3.3V@8MHz
 
+System Clock  = 8MHz
+
  */
 
 #include <MySensor.h>
@@ -51,7 +53,7 @@ Mys_v1.1 board compatible with Arduino PRO Mini 3.3V@8MHz
 #define SLEEP_TIME 5000
 #define MAX_ATTACHED_DS18B20 2
 
-#define NODE_ID 7
+#define NODE_ID 8
 
 #define DEBUG_RCC 1
 
@@ -140,7 +142,7 @@ MyTransportNRF24 transport(RF24_CE_PIN, RF24_CS_PIN, RF24_PA_LEVEL_GW);
 MyHwATMega328 hw;
 MySensor node(transport,hw);
 #else
-MySensor node;
+MySensor MySensor node(RF24_CE_PIN, RF24_CS_PIN);;
 #endif
 
 
@@ -167,7 +169,7 @@ MyMessage msgDallas(CHILD_ID_DALLAS_TEMP_BASE, V_TEMP);
 void setup()
 {
   // start serial port
-  Serial.begin(9600);
+  //Serial.begin();
   /*
   ** Auto Node numbering
   node.begin();
@@ -230,7 +232,7 @@ void loop()
   // Switch to 1Mhz for the reminder of the sketch, save power and allow operation down to 1.8V
   if ( (loopCount == 5) && highfreq)
   {
-    switchClock(1<<CLKPS1); //should divide by 4 giving 4MHz operation
+    switchClock(1<<CLKPS0); //should divide by 2 giving 4MHz operation
   }
   
   if (loopCount > FORCE_TRANSMIT_INTERVAL)

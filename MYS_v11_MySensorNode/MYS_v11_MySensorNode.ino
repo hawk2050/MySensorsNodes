@@ -39,7 +39,8 @@ System Clock  = 8MHz
 #include <stdint.h>
 #include <math.h>
 
-#define API_v15
+//#define API_v15
+//#define DEBUG_RCC 1
 
 #ifdef API_v15
 #include <MyHwATMega328.h>
@@ -50,12 +51,12 @@ System Clock  = 8MHz
 // FORCE_TRANSMIT_INTERVAL, this number of times of wakeup, the sensor is forced to report all values to 
 // the controller
 #define FORCE_TRANSMIT_INTERVAL 3 
-#define SLEEP_TIME 5000
+#define SLEEP_TIME 10000
 #define MAX_ATTACHED_DS18B20 2
 
 #define NODE_ID 8
 
-#define DEBUG_RCC 1
+
 
 #define LIGHT_LEVEL_ENABLE  0
 #define DALLAS_ENABLE       0
@@ -142,7 +143,7 @@ MyTransportNRF24 transport(RF24_CE_PIN, RF24_CS_PIN, RF24_PA_LEVEL_GW);
 MyHwATMega328 hw;
 MySensor node(transport,hw);
 #else
-MySensor MySensor node(RF24_CE_PIN, RF24_CS_PIN);;
+MySensor node(RF24_CE_PIN, RF24_CS_PIN);;
 #endif
 
 
@@ -224,15 +225,18 @@ void setup()
 }
 void loop() 
 {
-  loopCount ++;
+  
   bool forceTransmit = false;
+  
+  loopCount ++;
   
   // When we wake up the 5th time after power on, switch to 1Mhz clock
   // This allows us to print debug messages on startup (as serial port is dependend on oscilator settings).
   // Switch to 1Mhz for the reminder of the sketch, save power and allow operation down to 1.8V
+  //BUG: loopCount nevers gets to 5 since it's reset to 0 after it gets above FORCE_TRANSMIT_INTERVAL
   if ( (loopCount == 5) && highfreq)
   {
-    switchClock(1<<CLKPS0); //should divide by 2 giving 4MHz operation
+    //switchClock(1<<CLKPS0); //should divide by 2 giving 4MHz operation
   }
   
   if (loopCount > FORCE_TRANSMIT_INTERVAL)
@@ -242,7 +246,8 @@ void loop()
   }
   // Process incoming messages (like config from server)
   node.process();
-  measureBattery(forceTransmit);
+  //measureBattery(forceTransmit);
+  measureBattery(true);
   
   #if LIGHT_LEVEL_ENABLE
   readLDRLightLevel(forceTransmit);
@@ -253,8 +258,10 @@ void loop()
   #endif
   
   #if HTU21D_ENABLE
-  readHTU21DTemperature(forceTransmit);
-  readHTU21DHumidity(forceTransmit);  
+  //readHTU21DTemperature(forceTransmit);
+  //readHTU21DHumidity(forceTransmit);  
+  readHTU21DTemperature(true);
+  readHTU21DHumidity(true);  
   #endif
   
   node.sleep(SLEEP_TIME);
@@ -303,6 +310,12 @@ void readHTU21DTemperature(bool force)
   {
     node.send(msgTemp.set(temp,1));
     lastTemp = temp;
+    #ifdef DEBUG_RCC
+    Serial.print(" Temperature:");
+    Serial.print(temp, 1);
+    Serial.print("C");
+    Serial.println();
+    #endif
   }
 }
 
@@ -320,6 +333,12 @@ void readHTU21DHumidity(bool force)
   {
     node.send(msgHum.set(humd,1));
     lastHumidity = humd;
+    #ifdef DEBUG_RCC
+    Serial.print(" Humidity:");
+    Serial.print(humd, 1);
+    Serial.print("%");
+    Serial.println();
+    #endif
   }
 }
 #endif
@@ -411,6 +430,11 @@ uint16_t measureBattery(bool force)
   {
     node.send(msgVolt.set(readVcc(), 1));
     lastVcc = thisVcc;
+    #if DEBUG_RCC
+    Serial.print("Battery voltage = ");
+    Serial.println(thisVcc);
+    Serial.println('\r');
+    #endif
   }
   return thisVcc;
   

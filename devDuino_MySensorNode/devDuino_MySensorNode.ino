@@ -37,7 +37,7 @@ Hardware Connections (Breakoutboard to Arduino):
 #include <stdint.h>
 #include <math.h>
 
-#define API_v15
+//#define API_v15
 
 #ifdef API_v15
 #include <MyHwATMega328.h>
@@ -114,6 +114,7 @@ float lastTemperature;
 boolean receivedConfig = false;
 boolean metric = true; 
 uint8_t loopCount = 0;
+uint8_t clockSwitchCount = 0;
 /************************************/
 /********* GLOBAL VARIABLES *********/
 /************************************/
@@ -166,12 +167,13 @@ void setup()
 }
 void loop() 
 {
-  loopCount ++;
+  loopCount++;
+  clockSwitchCount++;
   bool forceTransmit = false;
   
   // When we wake up the 5th time after power on, switch to 1Mhz clock
   // This allows us to print debug messages on startup (as serial port is dependend on oscilator settings).
-  if ( (loopCount == 5) && highfreq)
+  if ( (clockSwitchCount == 5) && highfreq)
   {
     /* Switch to 1Mhz by setting clock prescaler to divide by 16 for the reminder of the sketch, 
      * to save power but more importantly to allow operation down to 1.8V

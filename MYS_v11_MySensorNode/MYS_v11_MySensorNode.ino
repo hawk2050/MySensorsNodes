@@ -51,7 +51,7 @@ System Clock  = 8MHz
 // FORCE_TRANSMIT_INTERVAL, this number of times of wakeup, the sensor is forced to report all values to 
 // the controller
 #define FORCE_TRANSMIT_INTERVAL 3 
-#define SLEEP_TIME 10000
+#define SLEEP_TIME 300000
 #define MAX_ATTACHED_DS18B20 2
 
 #define NODE_ID 8
@@ -130,6 +130,7 @@ bool highfreq = true;
 boolean receivedConfig = false;
 boolean metric = true; 
 uint8_t loopCount = 0;
+uint8_t clockSwitchCount = 0;
 /************************************/
 /********* GLOBAL VARIABLES *********/
 /************************************/
@@ -228,15 +229,16 @@ void loop()
   
   bool forceTransmit = false;
   
-  loopCount ++;
+  loopCount++;
+  clockSwitchCount++;
   
-  // When we wake up the 5th time after power on, switch to 1Mhz clock
+  // When we wake up the 5th time after power on, switch to 4Mhz clock
   // This allows us to print debug messages on startup (as serial port is dependend on oscilator settings).
   // Switch to 1Mhz for the reminder of the sketch, save power and allow operation down to 1.8V
   //BUG: loopCount nevers gets to 5 since it's reset to 0 after it gets above FORCE_TRANSMIT_INTERVAL
-  if ( (loopCount == 5) && highfreq)
+  if ( (clockSwitchCount == 5) && highfreq)
   {
-    //switchClock(1<<CLKPS0); //should divide by 2 giving 4MHz operation
+    switchClock(1<<CLKPS0); //should divide by 2 giving 4MHz operation
   }
   
   if (loopCount > FORCE_TRANSMIT_INTERVAL)
@@ -246,8 +248,8 @@ void loop()
   }
   // Process incoming messages (like config from server)
   node.process();
-  //measureBattery(forceTransmit);
-  measureBattery(true);
+  measureBattery(forceTransmit);
+  //measureBattery(true);
   
   #if LIGHT_LEVEL_ENABLE
   readLDRLightLevel(forceTransmit);
@@ -258,10 +260,10 @@ void loop()
   #endif
   
   #if HTU21D_ENABLE
-  //readHTU21DTemperature(forceTransmit);
-  //readHTU21DHumidity(forceTransmit);  
-  readHTU21DTemperature(true);
-  readHTU21DHumidity(true);  
+  readHTU21DTemperature(forceTransmit);
+  readHTU21DHumidity(forceTransmit);  
+  //readHTU21DTemperature(true);
+  //readHTU21DHumidity(true);  
   #endif
   
   node.sleep(SLEEP_TIME);

@@ -42,10 +42,7 @@ System Clock  = 8MHz
 
 #define API_v15
 
-#ifdef API_v15
-#include <MyHwATMega328.h>
-#include <MyTransportNRF24.h>
-#endif
+
 
 
 // FORCE_TRANSMIT_INTERVAL, this number of times of wakeup, the sensor is forced to report all values to 

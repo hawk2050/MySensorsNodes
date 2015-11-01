@@ -39,13 +39,9 @@ System Clock  = 8MHz
 #include <stdint.h>
 #include <math.h>
 
-//#define API_v15
-//#define DEBUG_RCC 1
 
-#ifdef API_v15
-#include <MyHwATMega328.h>
-#include <MyTransportNRF24.h>
-#endif
+#define API_v15
+#define DEBUG_RCC 0
 
 
 // FORCE_TRANSMIT_INTERVAL, this number of times of wakeup, the sensor is forced to report all values to 
@@ -54,7 +50,7 @@ System Clock  = 8MHz
 #define SLEEP_TIME 300000
 #define MAX_ATTACHED_DS18B20 2
 
-#define NODE_ID 8
+#define NODE_ID 7
 
 
 

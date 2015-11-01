@@ -31,18 +31,13 @@ Hardware Connections (Breakoutboard to Arduino):
  System clock is 16MHz
 
  */
-#include <MyMessage.h>
 #include <MySensor.h>
 #include <SPI.h>
 #include <stdint.h>
 #include <math.h>
 
-//#define API_v15
 
-#ifdef API_v15
-#include <MyHwATMega328.h>
-#include <MyTransportNRF24.h>
-#endif
+#define API_v15
 
 
 #include <Wire.h>

@@ -131,7 +131,7 @@ uint8_t clockSwitchCount = 0;
 /********* GLOBAL VARIABLES *********/
 /************************************/
 #ifdef API_v15
-MyTransportNRF24 transport(RF24_CE_PIN, RF24_CS_PIN, RF24_PA_LEVEL_GW);
+MyTransportNRF24 transport(RF24_CE_PIN, RF24_CS_PIN, RF24_PA_LEVEL);
 /*We're also tried to make the MySensors class hardware independent by introducing hardware profiles. 
  * They handle platform dependent things like sleeping, storage (EEPROM), watchdog, serial in- and output. 
  * Currently there is only one implementation for the ATMega328p (which also works fine for AtMega 2560)

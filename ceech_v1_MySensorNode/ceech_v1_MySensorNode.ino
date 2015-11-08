@@ -40,6 +40,7 @@ System Clock  = 8MHz
 #include <math.h>
 
 
+
 #define API_v15
 
 
@@ -48,10 +49,10 @@ System Clock  = 8MHz
 // FORCE_TRANSMIT_INTERVAL, this number of times of wakeup, the sensor is forced to report all values to 
 // the controller
 #define FORCE_TRANSMIT_INTERVAL 3 
-#define SLEEP_TIME 5000
+#define SLEEP_TIME 10000
 #define MAX_ATTACHED_DS18B20 2
 
-#define NODE_ID 7
+#define NODE_ID 10
 
 #define DEBUG_RCC 1
 
@@ -59,6 +60,7 @@ System Clock  = 8MHz
 #define DALLAS_ENABLE       1
 #define HTU21D_ENABLE       0
 #define DHT_ENABLE          1
+#define BMP180_ENABLE       1
 
 enum sensor_id
 {
@@ -67,6 +69,8 @@ enum sensor_id
   CHILD_ID_HTU21D_TEMP,
   CHILD_ID_DHT22_HUMIDITY,
   CHILD_ID_DHT22_TEMP,
+  CHILD_ID_BMP180_PRESSURE,
+  CHILD_ID_BMP180_TEMP,
   CHILD_ID_DALLAS_TEMP_BASE,
   CHILD_ID_VOLTAGE = CHILD_ID_DALLAS_TEMP_BASE + MAX_ATTACHED_DS18B20
   
@@ -88,6 +92,17 @@ enum sensor_id
 /*****************************/
 /********* FUNCTIONS *********/
 /*****************************/
+#if BMP180_ENABLE
+#include <SFE_BMP180.h>
+#include <Wire.h>
+
+#define ALTITUDE 20.0 /*Altitude of 24 Reynolds Ave above sea level*/
+SFE_BMP180 pressure;
+MyMessage msgBmp180Press(CHILD_ID_BMP180_PRESSURE, V_PRESSURE);
+MyMessage msgBmp180Temp(CHILD_ID_BMP180_TEMP, V_TEMP);
+
+#endif
+
 #if DHT_ENABLE
 #include "DHT.h"
 DHT dht;
@@ -173,7 +188,7 @@ void setup()
   #endif
   
   analogReference(INTERNAL);
-  node.sendSketchInfo("ceechv1-temp-hum", "0.4");
+  node.sendSketchInfo("ceechv1-temp-hum-pres", "0.4");
   
   node.present(CHILD_ID_VOLTAGE, S_CUSTOM);
   // Register all sensors to gateway (they will be created as child devices)
@@ -212,6 +227,23 @@ void setup()
   node.present(CHILD_ID_DHT22_HUMIDITY, S_HUM);
   node.present(CHILD_ID_DHT22_TEMP, S_TEMP);
 #endif
+
+#if BMP180_ENABLE
+  if (pressure.begin())
+  {
+    Serial.println("BMP180 init success");
+    node.present(CHILD_ID_BMP180_PRESSURE, S_BARO);
+    node.present(CHILD_ID_BMP180_TEMP, S_TEMP);
+  }
+  else
+  {
+    // Oops, something went wrong, this is usually a connection problem,
+    // see the comments at the top of this sketch for the proper connections.
+
+    Serial.println("BMP180 init fail\n\n");
+    while(1); // Pause forever.
+  }
+#endif
   
 }
 void loop() 
@@ -247,12 +279,70 @@ void loop()
   readHTU21DTemperature(forceTransmit);
   readHTU21DHumidity(forceTransmit);  
   #endif
+
+  #if BMP180_ENABLE
+  readBMP180TempAndPressure(forceTransmit);
+  #endif
   
   node.sleep(SLEEP_TIME);
    
   
 }
 
+#if BMP180_ENABLE
+void readBMP180TempAndPressure(bool force)
+{
+  char status;
+  double T,P;
+
+  // You must first get a temperature measurement to perform a pressure reading.
+  
+  // Start a temperature measurement:
+  // If request is successful, the number of ms to wait is returned.
+  // If request is unsuccessful, 0 is returned.
+
+  status = pressure.startTemperature();
+  if (status != 0)
+  {
+    // Wait for the measurement to complete:
+    node.wait(status);
+
+    // Retrieve the completed temperature measurement:
+    // Note that the measurement is stored in the variable T.
+    // Function returns 1 if successful, 0 if failure.
+
+    status = pressure.getTemperature(T);
+    if (status != 0)
+    {
+      // Start a pressure measurement:
+      // The parameter is the oversampling setting, from 0 to 3 (highest res, longest wait).
+      // If request is successful, the number of ms to wait is returned.
+      // If request is unsuccessful, 0 is returned.
+
+      status = pressure.startPressure(3);
+      if (status != 0)
+      {
+        // Wait for the measurement to complete:
+        node.wait(status);
+
+        // Retrieve the completed pressure measurement:
+        // Note that the measurement is stored in the variable P.
+        // Note also that the function requires the previous temperature measurement (T).
+        // (If temperature is stable, you can do one temperature measurement for a number of pressure measurements.)
+        // Function returns 1 if successful, 0 if failure.
+
+        status = pressure.getPressure(P,T);
+        if (status != 0)
+        {
+          node.send(msgBmp180Temp.set(T,1));
+          node.send(msgBmp180Press.set(P,1));
+          
+        }
+      }
+    }
+  }
+}
+#endif
 #if DHT_ENABLE
 void readDHTHumidityAndTemperature(bool force)
 {

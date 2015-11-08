@@ -48,9 +48,10 @@ System Clock  = 8MHz
 // the controller
 #define FORCE_TRANSMIT_INTERVAL 3 
 #define SLEEP_TIME 300000
+//#define SLEEP_TIME 10000
 #define MAX_ATTACHED_DS18B20 2
 
-#define NODE_ID 7
+#define NODE_ID 8
 
 
 
@@ -426,7 +427,7 @@ uint16_t measureBattery(bool force)
   uint16_t thisVcc = readVcc();
   if(thisVcc != lastVcc)
   {
-    node.send(msgVolt.set(readVcc(), 1));
+    node.send(msgVolt.set(thisVcc, 1));
     lastVcc = thisVcc;
     #if DEBUG_RCC
     Serial.print("Battery voltage = ");

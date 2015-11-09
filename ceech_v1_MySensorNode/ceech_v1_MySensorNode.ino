@@ -93,21 +93,41 @@ enum sensor_id
 /********* FUNCTIONS *********/
 /*****************************/
 #if BMP180_ENABLE
+
 #include <SFE_BMP180.h>
 #include <Wire.h>
-
-#define ALTITUDE 20.0 /*Altitude of 24 Reynolds Ave above sea level*/
 SFE_BMP180 pressure;
 MyMessage msgBmp180Press(CHILD_ID_BMP180_PRESSURE, V_PRESSURE);
 MyMessage msgBmp180Temp(CHILD_ID_BMP180_TEMP, V_TEMP);
+void readBMP180TempAndPressure(bool force);
+
+#endif
+
+
+#if DALLAS_ENABLE
+
+#include <OneWire.h>
+#include <DallasTemperature.h>
+float lastTemperature[MAX_ATTACHED_DS18B20];
+int numSensors=0;
+// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
+OneWire oneWire(ONE_WIRE_BUS);
+// Pass our oneWire reference to Dallas Temperature. 
+DallasTemperature dallas_sensor(&oneWire);
+// Initialize temperature message
+MyMessage msgDallas(CHILD_ID_DALLAS_TEMP_BASE, V_TEMP);
+void readDS18B20(bool force);
 
 #endif
 
 #if DHT_ENABLE
+
 #include "DHT.h"
 DHT dht;
 MyMessage msgHum(CHILD_ID_DHT22_HUMIDITY, V_HUM);
 MyMessage msgTemp(CHILD_ID_DHT22_TEMP, V_TEMP);
+void readDHTHumidityAndTemperature(bool force);
+
 #endif
 
 #if HTU21D_ENABLE
@@ -118,11 +138,16 @@ MyMessage msgTemp(CHILD_ID_DHT22_TEMP, V_TEMP);
 HTU21D myHumidity;
 MyMessage msgHum(CHILD_ID_HTU21D_HUMIDITY, V_HUM);
 MyMessage msgTemp(CHILD_ID_HTU21D_TEMP, V_TEMP);
+void readHTU21DTemperature(bool force);
+void readHTU21DHumidity(bool force);
+
 #endif
 
 #if LIGHT_LEVEL_ENABLE
+
 void readLDRLightLevel(bool force);
 MyMessage msgLightLevel(CHILD_ID_LIGHT, V_LIGHT_LEVEL);
+
 #endif
 
 
@@ -153,23 +178,7 @@ MySensor node(transport,hw);
 MySensor node(RF24_CE_PIN, RF24_CS_PIN);;
 #endif
 
-#if DALLAS_ENABLE
-#include <OneWire.h>
-#include <DallasTemperature.h>
-float lastTemperature[MAX_ATTACHED_DS18B20];
-int numSensors=0;
-// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
-OneWire oneWire(ONE_WIRE_BUS);
 
-// Pass our oneWire reference to Dallas Temperature. 
-DallasTemperature dallas_sensor(&oneWire);
-
-
-void readDS18B20(bool force);
-// Initialize temperature message
-MyMessage msgDallas(CHILD_ID_DALLAS_TEMP_BASE, V_TEMP);
-
-#endif
 /**********************************/
 /********* IMPLEMENTATION *********/
 /**********************************/
@@ -315,7 +324,7 @@ void readBMP180TempAndPressure(bool force)
     if (status != 0)
     {
       // Start a pressure measurement:
-      // The parameter is the oversampling setting, from 0 to 3 (highest res, longest wait).
+      // The parameter is the oversampling setting, from 0 to 3, higher numbers are slower, higher-res outputs..
       // If request is successful, the number of ms to wait is returned.
       // If request is unsuccessful, 0 is returned.
 

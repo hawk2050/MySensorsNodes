@@ -86,8 +86,8 @@ enum sensor_id
 #define HUMIDITY_SENSOR_DIGITAL_PIN 2
 
 #define ONE_WIRE_BUS 5
-#define RF24_CE_pin 7
-#define RF24_CS_pin 8
+#define RF24_CE_PIN 7
+#define RF24_CS_PIN 8
 
 /*****************************/
 /********* FUNCTIONS *********/

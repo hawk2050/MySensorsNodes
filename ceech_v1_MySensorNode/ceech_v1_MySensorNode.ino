@@ -257,8 +257,10 @@ void setup()
 }
 void loop() 
 {
-  loopCount ++;
-  bool forceTransmit = false;
+  bool forceTransmit;
+  
+  loopCount++;
+  forceTransmit = false;
   
   // When we wake up the 5th time after power on, switch to 1Mhz clock
   // This allows us to print debug messages on startup (as serial port is dependend on oscilator settings).
@@ -345,6 +347,16 @@ void readBMP180TempAndPressure(bool force)
         {
           node.send(msgBmp180Temp.set(T,1));
           node.send(msgBmp180Press.set(P,1));
+          #if DEBUG_RCC
+          Serial.print("BMP180 Temperature:");
+          Serial.print(T, 1);
+          Serial.print("C");
+          Serial.println();
+          Serial.print("BMP180 Pressure:");
+          Serial.print(P, 1);
+          Serial.print("mb");
+          Serial.println();
+          #endif
           
         }
       }
@@ -365,6 +377,7 @@ void readDHTHumidityAndTemperature(bool force)
   }
   
   float humidity = dht.getHumidity();
+  float temperature = dht.getTemperature();
   
   if(!isnan(humidity))
   {
@@ -374,7 +387,16 @@ void readDHTHumidityAndTemperature(bool force)
       lastHumidity = humidity;
     }
   }
-  float temperature = dht.getTemperature();
+
+  if(!isnan(temperature))
+  {
+    if(lastTemp != temperature)
+    {
+      node.send(msgTemp.set(temperature,1));
+      lastTemp = temperature;
+    }
+  }
+  
 }
 #endif
 

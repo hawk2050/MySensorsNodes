@@ -51,7 +51,10 @@ System Clock  = 8MHz
 //#define SLEEP_TIME 10000
 #define MAX_ATTACHED_DS18B20 2
 
-#define NODE_ID 8
+
+//#define NODE_ID 7
+//#define NODE_ID 8
+#define NODE_ID 9
 
 
 
@@ -59,6 +62,7 @@ System Clock  = 8MHz
 #define DALLAS_ENABLE       0
 #define HTU21D_ENABLE       1
 #define DHT_ENABLE          0
+#define BMP180_ENABLE       0
 
 enum sensor_id
 {
@@ -67,6 +71,8 @@ enum sensor_id
   CHILD_ID_HTU21D_TEMP,
   CHILD_ID_DHT22_HUMIDITY,
   CHILD_ID_DHT22_TEMP,
+  CHILD_ID_BMP180_PRESSURE,
+  CHILD_ID_BMP180_TEMP,
   CHILD_ID_DALLAS_TEMP_BASE,
   CHILD_ID_VOLTAGE = CHILD_ID_DALLAS_TEMP_BASE + MAX_ATTACHED_DS18B20
   
@@ -94,25 +100,59 @@ enum sensor_id
 /*****************************/
 /********* FUNCTIONS *********/
 /*****************************/
+
+#if BMP180_ENABLE
+
+#include <SFE_BMP180.h>
+#include <Wire.h>
+SFE_BMP180 pressure;
+MyMessage msgBmp180Press(CHILD_ID_BMP180_PRESSURE, V_PRESSURE);
+MyMessage msgBmp180Temp(CHILD_ID_BMP180_TEMP, V_TEMP);
+void readBMP180TempAndPressure(bool force);
+
+#endif
+
+#if DALLAS_ENABLE
+
+#include <OneWire.h>
+#include <DallasTemperature.h>
+float lastTemperature[MAX_ATTACHED_DS18B20];
+int numSensors=0;
+// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
+OneWire oneWire(ONE_WIRE_BUS);
+// Pass our oneWire reference to Dallas Temperature. 
+DallasTemperature dallas_sensor(&oneWire);
+// Initialize temperature message
+MyMessage msgDallas(CHILD_ID_DALLAS_TEMP_BASE, V_TEMP);
+void readDS18B20(bool force);
+
+#endif
+
 #if DHT_ENABLE
+
 #include "DHT.h"
 DHT dht;
 MyMessage msgHum(CHILD_ID_DHT22_HUMIDITY, V_HUM);
 MyMessage msgTemp(CHILD_ID_DHT22_TEMP, V_TEMP);
+
 #endif
 
 #if HTU21D_ENABLE
+
 #include <Wire.h>
 #include "HTU21D.h"
 //Create an instance of the object
 HTU21D myHumidity;
 MyMessage msgHum(CHILD_ID_HTU21D_HUMIDITY, V_HUM);
 MyMessage msgTemp(CHILD_ID_HTU21D_TEMP, V_TEMP);
+
 #endif
 
 #if LIGHT_LEVEL_ENABLE
+
 void readLDRLightLevel(bool force);
 MyMessage msgLightLevel(CHILD_ID_LIGHT, V_LIGHT_LEVEL);
+
 #endif
 
 
@@ -145,23 +185,7 @@ MySensor node(RF24_CE_PIN, RF24_CS_PIN);;
 #endif
 
 
-#if DALLAS_ENABLE
-#include <OneWire.h>
-#include <DallasTemperature.h>
-float lastTemperature[MAX_ATTACHED_DS18B20];
-int numSensors=0;
-// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
-OneWire oneWire(ONE_WIRE_BUS);
 
-// Pass our oneWire reference to Dallas Temperature. 
-DallasTemperature dallas_sensor(&oneWire);
-
-
-void readDS18B20(bool force);
-// Initialize temperature message
-MyMessage msgDallas(CHILD_ID_DALLAS_TEMP_BASE, V_TEMP);
-
-#endif
 /**********************************/
 /********* IMPLEMENTATION *********/
 /**********************************/
@@ -219,14 +243,32 @@ void setup()
   node.present(CHILD_ID_DHT22_HUMIDITY, S_HUM);
   node.present(CHILD_ID_DHT22_TEMP, S_TEMP);
 #endif
+
+#if BMP180_ENABLE
+  if (pressure.begin())
+  {
+    Serial.println("BMP180 init success");
+    node.present(CHILD_ID_BMP180_PRESSURE, S_BARO);
+    node.present(CHILD_ID_BMP180_TEMP, S_TEMP);
+  }
+  else
+  {
+    // Oops, something went wrong, this is usually a connection problem,
+    // see the comments at the top of this sketch for the proper connections.
+
+    Serial.println("BMP180 init fail\n\n");
+    while(1); // Pause forever.
+  }
+#endif
   
 }
 void loop() 
 {
   
-  bool forceTransmit = false;
+  bool forceTransmit;
   
   loopCount++;
+  forceTransmit = false;
   clockSwitchCount++;
   
   // When we wake up the 5th time after power on, switch to 4Mhz clock
@@ -262,11 +304,81 @@ void loop()
   //readHTU21DTemperature(true);
   //readHTU21DHumidity(true);  
   #endif
+
+  #if BMP180_ENABLE
+  readBMP180TempAndPressure(forceTransmit);
+  #endif
   
   node.sleep(SLEEP_TIME);
    
   
 }
+
+
+#if BMP180_ENABLE
+void readBMP180TempAndPressure(bool force)
+{
+  char status;
+  double T,P;
+
+  // You must first get a temperature measurement to perform a pressure reading.
+  
+  // Start a temperature measurement:
+  // If request is successful, the number of ms to wait is returned.
+  // If request is unsuccessful, 0 is returned.
+
+  status = pressure.startTemperature();
+  if (status != 0)
+  {
+    // Wait for the measurement to complete:
+    node.wait(status);
+
+    // Retrieve the completed temperature measurement:
+    // Note that the measurement is stored in the variable T.
+    // Function returns 1 if successful, 0 if failure.
+
+    status = pressure.getTemperature(T);
+    if (status != 0)
+    {
+      // Start a pressure measurement:
+      // The parameter is the oversampling setting, from 0 to 3, higher numbers are slower, higher-res outputs..
+      // If request is successful, the number of ms to wait is returned.
+      // If request is unsuccessful, 0 is returned.
+
+      status = pressure.startPressure(3);
+      if (status != 0)
+      {
+        // Wait for the measurement to complete:
+        node.wait(status);
+
+        // Retrieve the completed pressure measurement:
+        // Note that the measurement is stored in the variable P.
+        // Note also that the function requires the previous temperature measurement (T).
+        // (If temperature is stable, you can do one temperature measurement for a number of pressure measurements.)
+        // Function returns 1 if successful, 0 if failure.
+
+        status = pressure.getPressure(P,T);
+        if (status != 0)
+        {
+          node.send(msgBmp180Temp.set(T,1));
+          node.send(msgBmp180Press.set(P,1));
+          #if DEBUG_RCC
+          Serial.print("BMP180 Temperature:");
+          Serial.print(T, 1);
+          Serial.print("C");
+          Serial.println();
+          Serial.print("BMP180 Pressure:");
+          Serial.print(P, 1);
+          Serial.print("mb");
+          Serial.println();
+          #endif
+          
+        }
+      }
+    }
+  }
+}
+#endif
 
 #if DHT_ENABLE
 void readDHTHumidityAndTemperature(bool force)

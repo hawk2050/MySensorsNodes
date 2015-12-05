@@ -49,7 +49,7 @@ System Clock  = 8MHz
 // FORCE_TRANSMIT_INTERVAL, this number of times of wakeup, the sensor is forced to report all values to 
 // the controller
 #define FORCE_TRANSMIT_INTERVAL 3 
-#define SLEEP_TIME 10000
+#define SLEEP_TIME 300000
 #define MAX_ATTACHED_DS18B20 2
 
 #define NODE_ID 10
@@ -199,7 +199,7 @@ void setup()
   analogReference(INTERNAL);
   node.sendSketchInfo("ceechv1-temp-hum-pres", "0.4");
   
-  node.present(CHILD_ID_VOLTAGE, S_CUSTOM);
+  //node.present(CHILD_ID_VOLTAGE, S_CUSTOM);
   // Register all sensors to gateway (they will be created as child devices)
 
 #if DALLAS_ENABLE
@@ -234,7 +234,7 @@ void setup()
 #if DHT_ENABLE
   dht.setup(HUMIDITY_SENSOR_DIGITAL_PIN); 
   node.present(CHILD_ID_DHT22_HUMIDITY, S_HUM);
-  node.present(CHILD_ID_DHT22_TEMP, S_TEMP);
+  //node.present(CHILD_ID_DHT22_TEMP, S_TEMP);
 #endif
 
 #if BMP180_ENABLE
@@ -260,7 +260,7 @@ void loop()
   bool forceTransmit;
   
   loopCount++;
-  forceTransmit = false;
+  forceTransmit = true;
   
   // When we wake up the 5th time after power on, switch to 1Mhz clock
   // This allows us to print debug messages on startup (as serial port is dependend on oscilator settings).
@@ -276,7 +276,7 @@ void loop()
   }
   // Process incoming messages (like config from server)
   node.process();
-  measureBattery(forceTransmit);
+  //measureBattery(forceTransmit);
   
   #if LIGHT_LEVEL_ENABLE
   readLDRLightLevel(forceTransmit);
@@ -284,6 +284,12 @@ void loop()
   
    #if DALLAS_ENABLE
   readDS18B20(forceTransmit);
+  node.sleep(1000);
+  #endif
+
+  #if DHT_ENABLE
+  readDHTHumidityAndTemperature(forceTransmit);
+  node.sleep(1000);
   #endif
   
   #if HTU21D_ENABLE
@@ -293,6 +299,7 @@ void loop()
 
   #if BMP180_ENABLE
   readBMP180TempAndPressure(forceTransmit);
+  node.sleep(1000);
   #endif
   
   node.sleep(SLEEP_TIME);
@@ -301,10 +308,13 @@ void loop()
 }
 
 #if BMP180_ENABLE
+#define P_LIMIT_HI 1050.0
+#define P_LIMIT_LO 900.0
 void readBMP180TempAndPressure(bool force)
 {
   char status;
   double T,P;
+  static double lastP = 1000.0;
 
   // You must first get a temperature measurement to perform a pressure reading.
   
@@ -343,6 +353,15 @@ void readBMP180TempAndPressure(bool force)
         // Function returns 1 if successful, 0 if failure.
 
         status = pressure.getPressure(P,T);
+
+        /*Filter value to get rid of the occasional erroneous large value*/
+        if(P > P_LIMIT_HI || P < P_LIMIT_LO)
+        {
+          P = lastP;
+        }
+
+       lastP = P;
+        
         if (status != 0)
         {
           node.send(msgBmp180Temp.set(T,1));
@@ -387,7 +406,7 @@ void readDHTHumidityAndTemperature(bool force)
       lastHumidity = humidity;
     }
   }
-
+#if 0
   if(!isnan(temperature))
   {
     if(lastTemp != temperature)
@@ -396,7 +415,7 @@ void readDHTHumidityAndTemperature(bool force)
       lastTemp = temperature;
     }
   }
-  
+#endif  
 }
 #endif
 

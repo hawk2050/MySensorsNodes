@@ -54,7 +54,7 @@ System Clock  = 8MHz
 
 #define NODE_ID 10
 
-#define DEBUG_RCC 1
+#define DEBUG_RCC 0
 
 #define LIGHT_LEVEL_ENABLE  0
 #define DALLAS_ENABLE       1
@@ -284,12 +284,12 @@ void loop()
   
    #if DALLAS_ENABLE
   readDS18B20(forceTransmit);
-  node.sleep(1000);
+  node.wait(1000);
   #endif
 
   #if DHT_ENABLE
   readDHTHumidityAndTemperature(forceTransmit);
-  node.sleep(1000);
+  node.wait(1000);
   #endif
   
   #if HTU21D_ENABLE
@@ -299,10 +299,10 @@ void loop()
 
   #if BMP180_ENABLE
   readBMP180TempAndPressure(forceTransmit);
-  node.sleep(1000);
+  node.wait(1000);
   #endif
   
-  node.sleep(SLEEP_TIME);
+  node.wait(SLEEP_TIME);
    
   
 }

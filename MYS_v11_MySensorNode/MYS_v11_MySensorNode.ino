@@ -60,7 +60,8 @@ System Clock  = 8MHz
 
 #define LIGHT_LEVEL_ENABLE  0
 #define DALLAS_ENABLE       0
-#define HTU21D_ENABLE       1
+#define HTU21D_ENABLE       0
+#define SI7021_ENABLE       1
 #define DHT_ENABLE          0
 #define BMP180_ENABLE       0
 
@@ -69,6 +70,8 @@ enum sensor_id
   CHILD_ID_LIGHT = 0,
   CHILD_ID_HTU21D_HUMIDITY,
   CHILD_ID_HTU21D_TEMP,
+  CHILD_ID_SI7021_HUMIDITY,
+  CHILD_ID_SI7021_TEMP,
   CHILD_ID_DHT22_HUMIDITY,
   CHILD_ID_DHT22_TEMP,
   CHILD_ID_BMP180_PRESSURE,
@@ -148,6 +151,17 @@ MyMessage msgTemp(CHILD_ID_HTU21D_TEMP, V_TEMP);
 
 #endif
 
+#if SI7021_ENABLE
+
+#include <Wire.h>
+#include <SI7021.h>
+//Create an instance of the object
+SI7021 myHumidity;
+MyMessage msgHum(CHILD_ID_SI7021_HUMIDITY, V_HUM);
+MyMessage msgTemp(CHILD_ID_SI7021_TEMP, V_TEMP);
+
+#endif
+
 #if LIGHT_LEVEL_ENABLE
 
 void readLDRLightLevel(bool force);
@@ -204,7 +218,7 @@ void setup()
   #endif
   
   analogReference(INTERNAL);
-  node.sendSketchInfo("mys_v11-temp-hum", "0.4");
+  node.sendSketchInfo("mys_v11-temp-hum", "0.5");
   
   node.present(CHILD_ID_VOLTAGE, S_CUSTOM);
   // Register all sensors to gateway (they will be created as child devices)
@@ -236,6 +250,12 @@ void setup()
   myHumidity.begin();
   node.present(CHILD_ID_HTU21D_HUMIDITY, S_HUM);
   node.present(CHILD_ID_HTU21D_TEMP, S_TEMP);
+#endif
+
+#if SI7021_ENABLE
+  myHumidity.begin();
+  node.present(CHILD_ID_SI7021_HUMIDITY, S_HUM);
+  node.present(CHILD_ID_SI7021_TEMP, S_TEMP);
 #endif
 
 #if DHT_ENABLE
@@ -303,6 +323,10 @@ void loop()
   readHTU21DHumidity(forceTransmit);  
   //readHTU21DTemperature(true);
   //readHTU21DHumidity(true);  
+  #endif
+
+  #if SI7021_ENABLE
+  readSI7021TempHumidity(forceTransmit);
   #endif
 
   #if BMP180_ENABLE
@@ -452,6 +476,49 @@ void readHTU21DHumidity(bool force)
     #endif
   }
 }
+#endif
+
+#if SI7021_ENABLE
+void readSI7021TempHumidity(bool force)
+{
+  static float lastTemp = 0;
+  static float lastHum = 0;
+  
+  if (force)
+  {
+   lastTemp = -100;
+   lastHum = 0;
+  }
+
+  si7021_env data = myHumidity.getHumidityAndTemperature();
+  float temp = 1.0*data.celsiusHundredths/100;
+  int humd = data.humidityPercent;
+  
+  if(lastTemp != temp)
+  {
+    node.send(msgTemp.set(temp,1));
+    lastTemp = temp;
+    #ifdef DEBUG_RCC
+    Serial.print(" Temperature:");
+    Serial.print(temp, 1);
+    Serial.print("C");
+    Serial.println();
+    #endif
+  }
+
+  if(lastHum != humd)
+  {
+    node.send(msgHum.set(humd,1));
+    lastHum = humd;
+    #ifdef DEBUG_RCC
+    Serial.print(" Humidity:");
+    Serial.print(humd, 1);
+    Serial.print("%");
+    Serial.println();
+    #endif
+  }
+}
+
 #endif
 
 #if DALLAS_ENABLE

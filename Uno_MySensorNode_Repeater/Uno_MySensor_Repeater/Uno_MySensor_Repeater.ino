@@ -52,7 +52,7 @@ System Clock  = 16MHz
 #define SLEEP_TIME 10000
 #define MAX_ATTACHED_DS18B20 2
 
-#define NODE_ID 12
+#define NODE_ID 16
 
 #define DEBUG_RCC 1
 
@@ -178,14 +178,17 @@ MySensor node(transport,hw);
 MySensor node(RF24_CE_PIN, RF24_CS_PIN);;
 #endif
 
+// constants won't change. Used here to set a pin number :
+const int ledPin =  13;      // the number of the LED pin
 
+// Variables will change :
+int ledState = LOW;             // ledState used to set the LED
 /**********************************/
 /********* IMPLEMENTATION *********/
 /**********************************/
 void setup()
 {
-  // start serial port
-  //Serial.begin(115200);
+  
   /*
   ** Auto Node numbering
   node.begin();
@@ -197,6 +200,8 @@ void setup()
   #endif
   
   analogReference(INTERNAL);
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
   node.sendSketchInfo("Uno_SensorRepeater", "0.1");
   
   //node.present(CHILD_ID_VOLTAGE, S_CUSTOM);
@@ -261,6 +266,8 @@ void loop()
   
   loopCount++;
   forceTransmit = true;
+
+  digitalWrite(ledPin, HIGH);
   
   // When we wake up the 5th time after power on, switch to 1Mhz clock
   // This allows us to print debug messages on startup (as serial port is dependend on oscilator settings).
@@ -303,7 +310,7 @@ void loop()
   #endif
   
   node.wait(SLEEP_TIME);
-   
+  digitalWrite(ledPin, LOW); 
   
 }
 

@@ -47,21 +47,21 @@ System Clock  = 8MHz
 // FORCE_TRANSMIT_INTERVAL, this number of times of wakeup, the sensor is forced to report all values to 
 // the controller
 #define FORCE_TRANSMIT_INTERVAL 3 
-#define SLEEP_TIME 10000
+#define SLEEP_TIME 300000
 //#define SLEEP_TIME 10000
 #define MAX_ATTACHED_DS18B20 2
 
 
 //#define NODE_ID 7
 //#define NODE_ID 8
-#define NODE_ID 12
+#define NODE_ID 14
 
 
 
 #define LIGHT_LEVEL_ENABLE  0
 #define DALLAS_ENABLE       0
-#define HTU21D_ENABLE       1
-#define SI7021_ENABLE       0
+#define HTU21D_ENABLE       0
+#define SI7021_ENABLE       1
 #define DHT_ENABLE          0
 #define BMP180_ENABLE       0
 
@@ -195,7 +195,7 @@ MyTransportNRF24 transport(RF24_CE_PIN, RF24_CS_PIN, RF24_PA_LEVEL);
 MyHwATMega328 hw;
 MySensor node(transport,hw);
 #else
-MySensor node(RF24_CE_PIN, RF24_CS_PIN);;
+MySensor node(RF24_CE_PIN, RF24_CS_PIN);
 #endif
 
 

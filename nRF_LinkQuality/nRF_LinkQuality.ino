@@ -1,3 +1,5 @@
+
+
 /*
  PROJECT: MySensors / Quality of radio transmission 
  PROGRAMMER: AWI (MySensors libraries)
@@ -27,11 +29,13 @@ Change log:
 #define MY_RADIO_NRF24                                  // Enable and select radio type attached
 #define MY_RF24_CHANNEL 80                              // radio channel, default = 76
 
-#define MY_NODE_ID 250
+#define MY_NODE_ID 23
 #define NODE_TXT "Q 250"                                // Text to add to sensor name
 
 // #define MY_RF24_CE_PIN 7                             // Ceech board, 3.3v (7,8)  (pin default 9,10)
 // #define MY_RF24_CS_PIN 8
+#define RF24_CE_PIN 9
+#define RF24_CS_PIN 10
 #define DESTINATION_NODE 0                              // receiving fixed node id (default 0 = gateway)
 
 #include <SPI.h>
@@ -76,13 +80,24 @@ int failMessageCounter = 0 ;                            // total number of messa
 const unsigned long displayInterval = 1000UL ;          // display update in ms
 unsigned long lastDisplayUpdate = 0 ;                   // last update for loop timers
 
+
+MyTransportNRF24 transport(RF24_CE_PIN, RF24_CS_PIN, RF24_PA_LEVEL);
+//MyTransportNRF24 transport();
+/*We're also tried to make the MySensors class hardware independent by introducing hardware profiles. 
+ * They handle platform dependent things like sleeping, storage (EEPROM), watchdog, serial in- and output. 
+ * Currently there is only one implementation for the ATMega328p (which also works fine for AtMega 2560)
+ *Construct the class like this:
+  */
+MyHwATMega328 hw;
+MySensor node(transport,hw);
 // standard messages
 MyMessage counterMsg(counterChild, V_PERCENTAGE);       // Send value
 
 // ***** LCD
 LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Set the LCD I2C address
 
-void setup() {
+void setup()
+{
     Wire.begin();  // I2C
     // ** LCD display **
     // LCD 2 lines * 16 char.
@@ -90,6 +105,10 @@ void setup() {
     lcd.setBacklight(HIGH);
     lcd.setCursor(0, 0);
     lcd.print("AWI Quality nRF24");
+
+    node.begin(NULL,MY_NODE_ID,false);
+
+    node.present(counterChild, S_DIMMER, "Quality counter " NODE_TXT) ;  // counter uses percentage from dimmer value
 
     for(int i= 0 ; i <  messageCounterMax ; i++){       // init stores for moving averages
         failStore[i] = true ;
@@ -99,17 +118,12 @@ void setup() {
     delay(1000);
 }
 
-void presentation(){
-// MySensors
-    present(counterChild, S_DIMMER, "Quality counter " NODE_TXT) ;  // counter uses percentage from dimmer value
-}
-
 
 void loop() {
     // Sprint("count:") ; Sprintln(messageCounter) ;
     LCD_local_display();
     missedStore[failStorePointer] = false  ;            // set slot to false (ack message needs to set) ; 
-    boolean succes = failStore[failStorePointer] = send(counterMsg.setDestination(DESTINATION_NODE).set(failStorePointer), true);  // send to destination with ack
+    boolean succes = failStore[failStorePointer] = node.send(counterMsg.setDestination(DESTINATION_NODE).set(failStorePointer), true);  // send to destination with ack
     if (!succes){
         failMessageCounter++ ; 
         Sprint("Fail on message: ") ; Sprint(failStorePointer) ;
@@ -119,15 +133,18 @@ void loop() {
     if(failStorePointer >= messageCounterMax){
         failStorePointer =  0   ;                       // wrap counter
     }
-    wait(counterUpdateDelay) ;                          // wait for things to settle and ack's to arrive
+    node.wait(counterUpdateDelay) ;                          // wait for things to settle and ack's to arrive
 }
 
-void receive(const MyMessage &message) {                // Expect few types of messages from controller
+void receive(const MyMessage &message)
+{   // Expect few types of messages from controller
     newMessage = message.getInt();                      // get received value
-    switch (message.type){
+    switch (message.type)
+    {
         case V_PERCENTAGE:
             missedStore[newMessage] = true ;            // set corresponding flag to received.
-            if (newMessage > lastMessage){              // number of messages missed from lastMessage (kind of, faulty at wrap)
+            if (newMessage > lastMessage)
+            {              // number of messages missed from lastMessage (kind of, faulty at wrap)
                 Sprint("Missed messages: ") ; Sprintln( newMessage - lastMessage - 1) ;
                 missedMessageCounter += newMessage - lastMessage - 1 ;
             }
@@ -140,15 +157,18 @@ void receive(const MyMessage &message) {                // Expect few types of m
 
 // calculate number of false values in array 
 // takes a lot of time, but who cares...
-int getCount(boolean countArray[], int size){
+int getCount(boolean countArray[], int size)
+{
     int falseCount = 0 ;
-    for (int i = 0 ; i < size ; i++){
+    for (int i = 0 ; i < size ; i++)
+    {
         falseCount += countArray[i]?0:1 ;
     }
     return falseCount ;
 }
 
-void LCD_local_display(void){
+void LCD_local_display(void)
+{
 /* prints all available variables on LCD display with units
 */
     

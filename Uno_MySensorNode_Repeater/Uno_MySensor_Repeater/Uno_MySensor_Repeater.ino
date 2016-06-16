@@ -179,7 +179,7 @@ MySensor node(RF24_CE_PIN, RF24_CS_PIN);;
 #endif
 
 // constants won't change. Used here to set a pin number :
-const int ledPin =  13;      // the number of the LED pin
+const int ledPin =  13;      // the number of the LED pin, Can't use pin 13 as this is also SCLK for SPI bus!!!!
 
 // Variables will change :
 int ledState = LOW;             // ledState used to set the LED
@@ -200,8 +200,8 @@ void setup()
   #endif
   
   analogReference(INTERNAL);
-  pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, LOW);
+  //pinMode(ledPin, OUTPUT);
+  //digitalWrite(ledPin, LOW);
   node.sendSketchInfo("Uno_SensorRepeater", "0.1");
   
   //node.present(CHILD_ID_VOLTAGE, S_CUSTOM);
@@ -267,7 +267,7 @@ void loop()
   loopCount++;
   forceTransmit = true;
 
-  digitalWrite(ledPin, HIGH);
+  //digitalWrite(ledPin, HIGH);
   
   // When we wake up the 5th time after power on, switch to 1Mhz clock
   // This allows us to print debug messages on startup (as serial port is dependend on oscilator settings).
@@ -310,7 +310,7 @@ void loop()
   #endif
   
   node.wait(SLEEP_TIME);
-  digitalWrite(ledPin, LOW); 
+  //digitalWrite(ledPin, LOW); 
   
 }
 

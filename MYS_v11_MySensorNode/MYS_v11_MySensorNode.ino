@@ -54,7 +54,7 @@ System Clock  = 8MHz
 
 //#define NODE_ID 7
 //#define NODE_ID 8
-#define NODE_ID 14
+#define NODE_ID 20
 
 
 

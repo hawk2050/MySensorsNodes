@@ -37,7 +37,24 @@
 #include <SPI.h>
 #include <MySensor.h>  
 
+// display
+#include <Wire.h>                                           // I2C
+#include <LiquidCrystal_I2C.h>                              // LCD display with I2C interface
+
+
+// helpers
+#define LOCAL_DEBUG
+
+#ifdef LOCAL_DEBUG
+#define Sprint(a) (Serial.print(a))                     // macro as substitute for print, enable if no print wanted
+#define Sprintln(a) (Serial.println(a))                 // macro as substitute for println
+#else
+#define Sprint(a)                                       // enable if no print wanted -or- 
+#define Sprintln(a)                                     // enable if no print wanted
+#endif
+
 #define NODE_ID 20
+
 
 #define RF24_CE_PIN 9
 #define RF24_CS_PIN 10
@@ -55,6 +72,9 @@ unsigned long SEND_FREQUENCY = 5000; // Minimum time between send (in millisecon
 MyHwATMega328 hw;
 MySensor gw(transport,hw);
 
+// ***** LCD
+LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Set the LCD I2C address
+
 double ppwh = ((double)PULSE_FACTOR)/1000; // Pulses per watt hour
 boolean pcReceived = false;
 volatile unsigned long pulseCount = 0;   
@@ -63,6 +83,7 @@ volatile unsigned long watt = 0;
 unsigned long oldPulseCount = 0;   
 unsigned long oldWatt = 0;
 double oldKwh;
+double kwh;
 unsigned long lastSend;
 MyMessage wattMsg(CHILD_ID,V_WATT);
 MyMessage kwhMsg(CHILD_ID,V_KWH);
@@ -71,7 +92,15 @@ MyMessage pcMsg(CHILD_ID,V_VAR1);
 
 void setup()  
 {  
-   #ifdef NODE_ID
+  Wire.begin();  // I2C
+  // ** LCD display **
+  // LCD 2 lines * 16 char.
+  lcd.begin(16, 2);
+  lcd.setBacklight(HIGH);
+  lcd.setCursor(0, 0);
+  lcd.print("Energy Pulse Meter");   
+   
+  #ifdef NODE_ID
   gw.begin(NULL,NODE_ID,false);
   #else
   gw.begin(NULL,AUTO,false);
@@ -96,6 +125,7 @@ void setup()
 
 void loop()     
 { 
+  LCD_local_display();
   gw.process();
   unsigned long now = millis();
   // Only send values at a maximum frequency or woken up from sleep
@@ -120,7 +150,7 @@ void loop()
     if (pulseCount != oldPulseCount)
     {
       gw.send(pcMsg.set(pulseCount));  // Send pulse count value to gw 
-      double kwh = ((double)pulseCount/((double)PULSE_FACTOR));     
+      kwh = ((double)pulseCount/((double)PULSE_FACTOR));     
       oldPulseCount = pulseCount;
       if (kwh != oldKwh)
       {
@@ -168,4 +198,16 @@ void onPulse()
 }
 
 
-
+void LCD_local_display(void)
+{
+/* prints all available variables on LCD display with units
+*/
+    
+    char buf[17];                                           // buffer for max 16 char display
+    lcd.setCursor(0, 0);
+    snprintf(buf, sizeof buf, "KWh:%5d ", kwh);
+    lcd.print(buf);
+    lcd.setCursor(0, 1);
+    snprintf(buf, sizeof buf, "Load:%4d watts", watt);
+    lcd.print(buf);
+}
